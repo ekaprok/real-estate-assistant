@@ -1,0 +1,132 @@
+# Real Estate Assistant - Final STR Investment Report Template
+# Defines the structure of the final report delivered to the user.
+#
+# Scope:
+#   - Municipality (city/town) is the lowest geographic unit of analysis.
+#   - The report showcases what works best in each municipality, not personalized ROI.
+
+report_metadata:
+  generated_at: "2026-06-24T12:00:00Z"
+
+  user_inputs:
+    # Geographic scope for the search pipeline (states, regions, metros — resolved to municipalities internally)
+    target_locations: ["New Hampshire", "Poconos"]
+    # The ONLY user input: maximum acquisition spend (an existing property, or the land/lot if building).
+    max_budget: 500000
+
+  data_sources:
+    financial_data_source: "Mashvisor"
+    legal_data_source: "Serper.dev web search + municipal / Municode / eCode360 / AmLegal scrape"
+    construction_cost_source: "Serper.dev regional cost-per-sqft search + lightweight LLM extraction"
+
+# Ranked shortlist of top municipalities that survived legal, budget, and financial screening (typically 3–5)
+recommended_municipalities:
+  - rank: 1
+
+    location:
+      municipality: "Gatlinburg"
+      state: "TN"
+      county: "Sevier"  # Included when STR rules are county-governed or split across jurisdictions
+
+    # Composite score (0–100) for municipal STR attractiveness
+    municipal_str_score: 92
+    # Weights used to compute the composite (must sum to 100)
+    score_weights:
+      cap_rate_yield: 30        # NOI / median property price
+      budget_fit: 25            # Median home value vs max_budget
+      legal_friendliness: 20    # ALLOWED > RESTRICTED; penalized for caps, min-stay, primary-residence rules
+  
+    budget_fit:
+      # Affordability is screened on median existing-home value (the reliably sourceable price signal).
+      # Vacant-lot pricing is not reliably available, so it is not used as a hard gate.
+      within_budget: true
+      budget_headroom: 50000  # max_budget minus financial_metrics.median_property_price
+
+    # Step 3 Output: Deep Legal Verification
+    legal_and_compliance:
+      # MUST be ALLOWED or RESTRICTED or UNCLEAR to appear in the final report (BANNED municipalities are dropped)
+      status: "RESTRICTED"
+      restriction_reason: "STRs are only permitted in commercially zoned areas or designated tourist overlays."
+      # Where inside the municipality STR is legal.
+      eligible_zones_summary: "Tourist overlay districts and C-2 commercial zones; residential R-1 outside overlays is prohibited."
+      primary_residence_required: false
+      minimum_stay_days: 2
+      permit_cap_exists: false
+      permits:
+        - name: "Tourist Accommodation Permit"
+          process_summary: "Requires annual fire inspection and local business license."
+          application_url: "https://www.gatlinburgtn.gov/departments/finance/business_licenses.php"
+      special_taxes:
+        - name: "Gross Receipts Tax"
+          rate: "9.75%"
+          description: "Combined state and local sales tax applied to gross rental income."
+      # Less reliable. The chance STR rules get stricter or banned soon (the fields above describe today's rules).
+      # Low/Medium/High + a short reason, based on proposed bans, recent rule changes, or local pushback
+      # found in news and council minutes. It's a rough heads-up, so it only nudges the legal score, not a hard rule.
+      regulatory_trajectory_risk: "Low risk. STRs are a primary economic driver for the city."
+      summary_of_restrictions: "Highly favorable for STRs, provided the property is within the correct zoning overlay and passes fire inspection."
+
+    # HOAs are private and cannot be verified by this system — a disclaimer only, not a data point.
+    hoa_disclaimer: "Resort and planned communities in this market commonly carry HOAs whose CC&Rs may restrict STRs. This system verifies only government zoning/law — confirm HOA rules independently before closing."
+
+    # Step 4 Output: Municipal Financial Metrics (Mashvisor city-level Lookup + Historical Performance)
+    financial_metrics:
+      # Mashvisor comp pool size for this municipality — higher = more reliable medians
+      sample_size: 142
+      data_quality: "high"  # high (≥80) | medium (≥30) | low (≥15) | very_low (<15)
+
+      median_property_price: 450000
+      average_daily_rate_adr: 285
+      annual_occupancy_rate_percentage: 68
+      annual_revenue_estimate: 70737  # Gross rental income (ADR × 365 × occupancy)
+      annual_noi_estimate: 50931      # Gross revenue minus operating expenses
+      average_cap_rate_percentage: 7.4  # Primary yield metric (no user-specific financing assumed)
+
+      active_listings_count: 3450            # Competition density; gives the growth %s a base to interpret
+      listings_growth_yoy_percentage: 2.1    # Supply trend — how fast new STRs are entering the market
+      revenue_growth_yoy_percentage: 4.2     # Demand trend — revenue here outpaces supply, a healthy sign
+      # Cash-flow risk (separate from saturation): concentrated income means long dead months to carry.
+      seasonality_summary: "High — ~60% of revenue between June and October; weakest Nov–Feb."
+
+      # Operating expenses from Mashvisor expenses_map (only categories the API returns)
+      estimated_opex:
+        total_annual: 19806
+        total_percentage_of_revenue: 28
+        breakdown:
+          property_management: { annual: 10611, percentage_of_revenue: 15 }
+          insurance: { annual: 2122, percentage_of_revenue: 3 }
+          utilities: { annual: 3537, percentage_of_revenue: 5 }
+          property_taxes: { annual: 3536, percentage_of_revenue: 5 }
+
+    # Discovered from Mashvisor city-level subgroups (bed/bath/type) — not user preference
+    optimal_property_configuration:
+      property_type: "Cabin"
+      bedrooms: 3
+      bathrooms: 2.5
+      accommodates: 8
+      # Comp-derived amenities that drive ADR/occupancy in this market (qualitative — premiums not quantified)
+      high_impact_amenities: ["Hot Tub", "Mountain View", "Fire Pit"]
+
+    # Web-search demand context for the market
+    demand_drivers: ["Great Smoky Mountains NP gateway", "Ober Mountain ski area", "Dollywood"]
+
+    # Build vs. Buy — compared per municipality. Cost-per-sqft is sourceable; deeper build detail is best-effort.
+    build_vs_buy:
+      recommended_strategy: "Buy Existing"  # Buy Existing | Build from Scratch
+      median_price_per_sqft_buy: 315         # Mashvisor
+      estimated_cost_per_sqft_build: 350     # Web search + LLM regional estimate
+      build_cost_premium_percentage: 11.1    # (build - buy) / buy — positive means building costs more
+      # Single qualitative assessment absorbing land supply, permitting, and construction hurdles.
+      # Exact lot pricing, setbacks, min lot size, impact fees, and utility hookups require local verification
+      # and are not reliably available from automated sources.
+      construction_feasibility: "Steep terrain raises build costs (retaining walls, engineered foundations) and many lots require septic. Buildable-lot supply and precise permitting must be verified locally."
+      notes: "Buying existing inventory currently wins on both cost-per-sqft and time-to-revenue versus building from scratch in this market."
+
+    # Step 6 Output: Final LLM Synthesis
+    qualitative_synthesis: "Gatlinburg ranks first for 3-bedroom cabins at a 7.8% cap rate, within your $500K budget (median home ~$450K). STRs are viable in tourist overlay zones with low regulatory risk. Buying existing inventory currently outperforms building, which carries an ~11% per-sqft premium plus septic and steep-slope hurdles."
+
+  # Additional municipalities follow the same structure, ranked 2, 3, etc.
+  # - rank: 2
+  #   location: { municipality: "...", state: "..." }
+  #   municipal_str_score: ...
+  #   ...
