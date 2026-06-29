@@ -102,7 +102,7 @@ recommended_municipalities:
     demand_drivers: ["Great Smoky Mountains NP gateway", "Ober Mountain ski area", "Dollywood"]
 
     # Step 5 Output: Final LLM Synthesis
-    qualitative_synthesis: "Gatlinburg ranks first for 3-bedroom cabins at a 7.8% cap rate, within your $500K budget (median home ~$450K). STRs are viable in tourist overlay zones with low regulatory risk, subject to a tourist-accommodation permit and fire inspection."
+    qualitative_synthesis: "Gatlinburg ranks first for 3-bedroom cabins at a 7.8% cap rate. STRs are viable in tourist overlay zones with low regulatory risk, subject to a tourist-accommodation permit and fire inspection."
 
 # List of municipalities that were screened out due to STR bans.
 banned_municipalities:

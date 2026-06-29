@@ -1,21 +1,29 @@
 # STR Agentic EDD Plan
 
 ## Phase 1: Establish the Evaluation Baseline (EDD)
-*   **Update `tests/eval/datasets/basic-dataset.json`**:
-    *   Add diverse test cases: known STR-friendly areas, known STR-banned areas, and known STR-restricted areas like areas with strict minimum-stay rules.
+*   **Update `tests/eval/datasets/basic-dataset.json`**: Ensure comprehensive coverage of real-world STR zoning scenarios to rigorously test the `DeepLegalLoopAgent`:
+    *   **Fully Banned**: New York City, NY (Local Law 18); Irvine, CA (absolute prohibition).
+    *   **Primary Residence Only**: Los Angeles, CA; Denver, CO (host must live on-site).
+    *   **Permit Caps & Lotteries**: San Diego, CA (Tier system & caps); Steamboat Springs, CO.
+    *   **Zoning Overlays & Commercial-Only**: Austin, TX; New Orleans, LA (strict residential restrictions).
+    *   **Minimum-Stay Requirements**: Honolulu, HI (30-day/90-day minimums depending on zone).
+    *   **Unique Structure Restrictions**: Jurisdictions that allow STRs but explicitly ban "temporary structures" (e.g., Yurts, RVs, Tiny Homes on wheels).
+    *   **Jurisdictional Nuance (City vs. Unincorporated County)**: Las Vegas city limits vs. unincorporated Clark County.
+    *   **STR-Friendly (Control Cases)**: Gatlinburg, TN; Broken Bow, OK.
 *   **Update `tests/eval/eval_config.yaml`**:
     *   Create `custom_response_quality` to enforce the output format perfectly matches `specs/final_report_template.yaml`.
-    *   Create custom metric for Step 2 to ensure accurate classification from search snippets.
-    *   Create a new custom metric (e.g., `micro_trajectory_adherence`) that grades the `{agent_data}` trace strictly for the Step 3 `LoopAgent` to ensure it:
+    *   Create a custom metric for Step 2 to ensure accurate classification (Banned vs. Allowed/Restricted) from search snippets, minimizing false positives that would drop viable markets.
+    *   Create a custom metric (e.g., `micro_trajectory_adherence`) that grades the `{agent_data}` trace strictly for the Step 3 `LoopAgent` to ensure it:
         1. Actually uses `fetch_page` to read zoning codes instead of guessing from search snippets.
-        2. Prioritizes scraping official sources (`.gov`, `municode.com`) over random blogs.
-        3. Does not get stuck in infinite scraping loops.
+        2. Prioritizes scraping official sources (`.gov`, `municode.com`, `ecode360.com`) over random blogs.
+        3. Correctly identifies the *specific* restriction type (e.g., primary residence vs. permit cap).
+        4. Does not get stuck in infinite scraping loops.
     *   *Note: Macro-pipeline trajectory (e.g., calling Mashvisor and Geographic APIs) will be verified via deterministic `pytest` unit/integration tests, not LLM-as-judge.*
 
 ## Phase 2: Backend Integrations & Agent Tools
 *   **LLM Tools (`app/tools.py`)**: Finish `serper_search` and `fetch_page`. These will be passed explicitly to the `LoopAgent` for deep legal research.
 *   **Backend API Clients (`app/integrations.py`)**:
-    *   **Geocoding**: Implement `geocode_location` using a free/cheap API (like Nominatim) to resolve ZIP codes and regions to municipalities.
+    *   **Geocoding**: Implement `geocode_location` using the Google Maps Geocoding API and Overpass API to resolve ZIP codes and regions to municipalities efficiently and scalably.
     *   **Mashvisor**: Finish `mashvisor_lookup` and `mashvisor_historical`, normalizing the outputs to match the schema expected by the report. Note: These are called deterministically by the pipeline script and are NOT exposed to the LLMs to prevent unprompted API usage.
 
 ## Phase 3: Agent & Pipeline Logic (The Funnel)
@@ -23,7 +31,8 @@ Implement the deterministic 5-step pipeline architecture as outlined in `specs/R
 
 ```mermaid
 graph TD
-    A[Step 1: Ingestion] --> B[Step 2: Macro Legal Screen]
+    A[Step 1: Ingestion] --> G[Step 1.5: Geographic Resolution]
+    G --> B[Step 2: Macro Legal Screen]
     B -->|BANNED| X[Drop]
     B -->|ALLOWED/RESTRICTED/UNCLEAR| D[Step 3: Deep Legal LoopAgent]
     D -->|BANNED| X
@@ -58,7 +67,7 @@ This is not a full agent, but a single-shot structured LLM call via the `google-
 
 ### 5. Report Assembly & Synthesis (`app/pipeline.py` & `app/llm.py`)
 *   **Role**: Handles Step 5 (Synthesis & Deterministic Report Assembly).
-*   **Deterministic Computation (Python)**: The orchestrator script computes all numeric/boolean fields (`municipal_str_score`, `budget_headroom`, `data_quality`, etc.) directly from Mashvisor data to avoid math hallucinations. It also ranks the final shortlist of markets.
+*   **Deterministic Computation (Python)**: The orchestrator script computes all numeric/boolean fields (`municipal_str_score`, `annual_revenue_estimate`, `data_quality`, etc.) directly from Mashvisor data to avoid math hallucinations. It also ranks the final shortlist of markets.
 *   **Synthesis (LLM)**: A fast single-shot LLM call generates a 2-3 sentence `qualitative_synthesis` grounded *only* on the deterministically calculated data.
 *   **Assembly**: The final output is validated against Pydantic models matching `specs/final_report_template.yaml` and serialized to YAML.
 

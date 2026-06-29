@@ -52,7 +52,7 @@ User Input:
 
 - **Target Geography:** States, cities, ZIP codes, or metro areas (e.g., `"New Hampshire"`, `"Jersey City", "10023", "Poconos"`).
 - **Home Types:** Traditional properties (e.g., `house`, `condo`) and Unique Stays (e.g., `tiny home`, `cabin`, `shipping container`, `dome`, `yurt`). (Note: the pipeline must check zoning and permits against the specific sub-type, as local regulations treat them differently.)
-- **Execution Strategy:** `"Build from scratch"` vs. `"Buy existing."`.
+- **Execution Strategy:** `"Build from scratch"` vs. `"Buy existing."` *(Note: Build-from-scratch evaluation is currently deferred to future work, so this input is recorded but bypassed by the downstream pipeline).*
 
 ### Step 1.5: Geographic Resolution
 
@@ -134,7 +134,7 @@ For the municipalities that passed the legal verification, the system fetches gr
 
 3. **Deterministic JSON Construction & Ranking:**
    - Instead of relying on an LLM to parse raw financial data (which can lead to hallucinations in math), the system **deterministically constructs the output** directly from the Mashvisor API responses using Python.
-   - The system calculates a final composite `municipal_str_score` for each municipality from the documented `score_weights` (cap-rate yield, budget fit, legal friendliness).
+   - The system calculates a final composite `municipal_str_score` for each municipality from the documented `score_weights` (cap-rate yield, legal friendliness).
    - The top 3-5 markets are shortlisted and passed to Step 5 for synthesis and report assembly.
 
 ### Step 5: Synthesis & Deterministic Report Assembly
@@ -143,9 +143,8 @@ The final step turns the per-municipality data gathered in Steps 2-4 into the st
 
 #### Process Flow
 1. **Deterministic computation (Python):** All numeric and boolean fields are computed in Python directly from the source data — never by an LLM — to avoid math hallucinations. This includes:
-   - `municipal_str_score` from `score_weights` (cap-rate yield, budget fit, legal friendliness; weights sum to 100).
-   - `budget_fit.within_budget` and `budget_fit.budget_headroom` (`max_budget - median_property_price`).
+   - `municipal_str_score` from `score_weights` (cap-rate yield, legal friendliness; weights sum to 100).
    - `annual_revenue_estimate`, `annual_noi_estimate`, and `data_quality` (from `sample_size` thresholds: high ≥80, medium ≥30, low ≥15, very_low <15).
    - Ranking the shortlist (typically 3-5 municipalities).
-2. **Qualitative synthesis (LLM):** Pass the deterministically built per-municipality object to a fast LLM (latest Gemini Flash) to generate the 2-3 sentence `qualitative_synthesis`, grounded only in the supplied data (e.g., "Gatlinburg ranks first for 3-bedroom cabins at a 7.4% cap rate, within your $500K budget...").
+2. **Qualitative synthesis (LLM):** Pass the deterministically built per-municipality object to a fast LLM (latest Gemini Flash) to generate the 2-3 sentence `qualitative_synthesis`, grounded only in the supplied data (e.g., "Gatlinburg ranks first for 3-bedroom cabins at a 7.4% cap rate..."). Additionally, use the LLM's general world knowledge to populate the `demand_drivers` list based on the municipality name.
 3. **Assembly:** Validate every field against typed (Pydantic) models that mirror the template, then serialize to YAML.
