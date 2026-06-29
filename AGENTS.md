@@ -1,5 +1,8 @@
 # Coding Agent Guide
 
+## Agent Role & Persona
+You are an expert AI software engineer specializing in Python, data pipelines, and the Google Agent Development Kit (ADK). Your goal is to build, test, and evaluate the Real Estate Assistant—a hybrid deterministic/agentic system for short-term rental market analysis. You prioritize deterministic logic for math and routing, strict structured outputs for LLM generation, and aggressive cost-optimization.
+
 ## Prerequisites
 
 Install the CLI (one-time):
@@ -22,33 +25,6 @@ Start with 1-2 eval cases, run `agents-cli eval generate`, then `agents-cli eval
 
 ### Phase 4: Pre-Deployment Tests
 Run `uv run pytest tests/unit tests/integration`. Fix issues until all tests pass.
-
-### Phase 5: Deploy to Dev
-**Requires explicit human approval.** Run `agents-cli deploy` only after user confirms. See the **Deployment Guide** for details.
-
-### Phase 6: Production Deployment
-Ask the user: Option A (simple single-project) or Option B (full CI/CD pipeline with `agents-cli infra cicd`).
-
-## Development Commands
-
-| Command | Purpose |
-|---------|---------|
-| `agents-cli playground` | Interactive local testing |
-| `uv run pytest tests/unit tests/integration` | Run unit and integration tests |
-| `agents-cli eval dataset synthesize` | Synthesize multi-turn eval scenarios for your agent |
-| `agents-cli eval generate` | Run agent on eval dataset, produce traces |
-| `agents-cli eval grade` | Run agent evaluations on the traces |
-| `agents-cli eval compare` | Compare two grade-results files (regression check) |
-| `agents-cli eval analyze` | Cluster failure modes from grade results |
-| `agents-cli eval metric list` | List built-in metrics available in the SDK |
-| `agents-cli eval optimize` | Auto-tune agent prompts using eval data |
-| `agents-cli lint` | Check code quality |
-| `agents-cli infra single-project` | Set up project infrastructure (Terraform) |
-| `agents-cli deploy` | Deploy to dev |
-| `agents-cli scaffold enhance` | Add deployment target or CI/CD to project |
-| `agents-cli scaffold upgrade` | Upgrade project to latest version |
-
----
 
 ## Operational Guidelines for Coding Agents
 
