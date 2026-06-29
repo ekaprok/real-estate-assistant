@@ -14,7 +14,7 @@
 
 ## Phase 2: Backend Integrations & Agent Tools
 *   **LLM Tools (`app/tools.py`)**: Finish `serper_search` and `fetch_page`. These will be passed explicitly to the `LoopAgent` for deep legal research.
-*   **Backend API Clients (`app/integrations.py`)**: 
+*   **Backend API Clients (`app/integrations.py`)**:
     *   **Geocoding**: Implement `geocode_location` using a free/cheap API (like Nominatim) to resolve ZIP codes and regions to municipalities.
     *   **Mashvisor**: Finish `mashvisor_lookup` and `mashvisor_historical`, normalizing the outputs to match the schema expected by the report. Note: These are called deterministically by the pipeline script and are NOT exposed to the LLMs to prevent unprompted API usage.
 
@@ -35,12 +35,12 @@ graph TD
 *   **Orchestration**: Wire Steps 1-5 together inside `run_pipeline` (`app/pipeline.py`) so `StrReportAgent` simply triggers the funnel and returns the report.
 
 ## Architecture & Logic Breakdown
-    
+
 The architecture is a **hybrid** approach combining deterministic scripting with targeted agentic reasoning. This ensures mathematical accuracy while handling the unstructured nature of legal research.
 
 ### 1. Orchestrator Script (`app/pipeline.py`)
 *   The overarching 5-step funnel is a highly deterministic Python script (`run_pipeline`).
-*   **Why a script?** We do not want an LLM deciding *when* to check Mashvisor or *how* to calculate ROI. 
+*   **Why a script?** We do not want an LLM deciding *when* to check Mashvisor or *how* to calculate ROI.
 
 ### 2. The Root Agent (`app/agent.py`)
 *   **Agent**: `StrReportAgent` (inherits from `BaseAgent`).
@@ -59,7 +59,7 @@ This is not a full agent, but a single-shot structured LLM call via the `google-
 ### 5. Report Assembly & Synthesis (`app/pipeline.py` & `app/llm.py`)
 *   **Role**: Handles Step 5 (Synthesis & Deterministic Report Assembly).
 *   **Deterministic Computation (Python)**: The orchestrator script computes all numeric/boolean fields (`municipal_str_score`, `budget_headroom`, `data_quality`, etc.) directly from Mashvisor data to avoid math hallucinations. It also ranks the final shortlist of markets.
-*   **Synthesis (LLM)**: A fast single-shot LLM call generates a 2-3 sentence `qualitative_synthesis` grounded *only* on the deterministically calculated data. 
+*   **Synthesis (LLM)**: A fast single-shot LLM call generates a 2-3 sentence `qualitative_synthesis` grounded *only* on the deterministically calculated data.
 *   **Assembly**: The final output is validated against Pydantic models matching `specs/final_report_template.yaml` and serialized to YAML.
 
 ## Phase 4: Testing & The Quality Flywheel

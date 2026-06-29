@@ -1,0 +1,23 @@
+repos:
+  - repo: local
+    hooks:
+      - id: end-of-file-fixer
+        name: end-of-file-fixer
+        entry: end-of-file-fixer
+        language: system
+        types: [text]
+        stages: [pre-commit]
+
+      - id: trailing-whitespace
+        name: trailing-whitespace
+        entry: trailing-whitespace-fixer
+        language: system
+        types: [text]
+        stages: [pre-commit]
+
+      - id: semgrep-local
+        name: semgrep-local
+        entry: semgrep scan --config .semgrep/rules.yaml --error
+        language: system
+        types: [python]
+        stages: [pre-commit]

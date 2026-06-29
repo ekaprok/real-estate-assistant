@@ -56,9 +56,9 @@ User Input:
 
 ### Step 1.5: Geographic Resolution
 
-Because ZIP codes and metro areas cross legal boundaries, the system must resolve all geographic inputs down to the specific **municipality (city/town/village/county)** and **zoning district** to accurately verify STR regulations. 
+Because ZIP codes and metro areas cross legal boundaries, the system must resolve all geographic inputs down to the specific **municipality (city/town/village/county)** and **zoning district** to accurately verify STR regulations.
 
-This resolution will be handled using a two-step approach: 
+This resolution will be handled using a two-step approach:
 1. The **Google Maps Geocoding API** will resolve colloquial regions (e.g., "Poconos") into highly accurate bounding boxes.
 2. The **Overpass API** will query for all `admin_level=8` (municipalities) intersecting that bounding box.
 
@@ -66,7 +66,7 @@ These results must be cached to avoid redundant API calls.
 
 ### Step 2: The Macro Legal Screen (Triage)
 
-This step is designed to be the **absolute cheapest and fastest** filtering layer. The goal is to aggressively prune the list of municipalities using only low-cost Web Search APIs and the smallest, fastest LLMs available. 
+This step is designed to be the **absolute cheapest and fastest** filtering layer. The goal is to aggressively prune the list of municipalities using only low-cost Web Search APIs and the smallest, fastest LLMs available.
 
 #### Tools & Infrastructure Required
 - **Search API:** Serper.dev
@@ -77,13 +77,13 @@ This step is designed to be the **absolute cheapest and fastest** filtering laye
 
 1. **Cached Web Search:**
    - **Query Structure to Serper API:** `"{municipality}" "{state}" ("short-term rental" OR "transient occupancy tax") (ban OR ordinance OR zoning) (site:.gov OR site:.us OR site:municode.com OR site:ecode360.com OR site:amlegal.com)`
-   - *Relevance & Query Impact Note:* Including third-party civic platforms (Municode, eCode360, AmLegal) is strictly necessary for system accuracy. The vast majority of small-to-medium US municipalities lack the IT infrastructure to host searchable ordinances on their primary `.gov` or `.us` websites, outsourcing this entirely to these SaaS platforms. 
+   - *Relevance & Query Impact Note:* Including third-party civic platforms (Municode, eCode360, AmLegal) is strictly necessary for system accuracy. The vast majority of small-to-medium US municipalities lack the IT infrastructure to host searchable ordinances on their primary `.gov` or `.us` websites, outsourcing this entirely to these SaaS platforms.
    - **Caching Strategy:** Cash by `hash(state + municipality + query)` in SQLite with a 90 day TTL.
 
 2. **Lightweight LLM Triage:**
    The system feeds *only the text snippets* from the search results into the lightweight LLM. These snippets are returned natively in the Serper API JSON response and concatenate the top 5-10 snippets into a single short text block.
    - **Prompt & Output Design:** We strictly use **JSON with Structured Outputs** to enforce deterministic output. The enforced schema is: `{"status": "BANNED" | "ALLOWED" | "RESTRICTED" | "UNCLEAR"}`.
-    - **Decision Logic:** 
+    - **Decision Logic:**
       - If `BANNED`: The municipality is dropped from the main pipeline but recorded to be listed in the final report's banned section.
       - If `ALLOWED`, `RESTRICTED`, or `UNCLEAR`: The municipality survives and is passed to Step 3 for Deep Legal Verification. (It is cheaper to pass an "unclear" municipality to Step 3 than to run a heavy LLM in Step 2).
 
@@ -100,7 +100,7 @@ A single search is rarely enough. Step 3 is therefore implemented as an **iterat
 2. **Scrape:** Select the "highest-confidence" URLs by filtering for official municipal domains (e.g., `.gov`, `.us`) or known zoning hosts (e.g., `municode.com`, `ecode360.com`, `amlegal.com`, `hostcompliance.com`), take the top 2-3, and scrape the *full text* with the page-fetch tool.
 3. **Evaluate:** A frontier LLM evaluates the accumulated text against the structured schema defined in the final report template. The LLM must be explicitly prompted with the user's `desired_home_types` to ensure it checks for explicitly banned or allowed unique structures within the zoning code.
   - Enforce a strict JSON Schema output for this step, just as we did in the triage phase. Returning structured JSON with a schema matching the `legal_and_compliance` block from `specs/final_report_template.yaml`.
-  - Cache the output by the municipality name and state. 
+  - Cache the output by the municipality name and state.
 4. **Decide / Refine:** If legality, minimum-stay, permits, taxes, and rules regarding the specific `desired_home_types` are resolved (status != `UNCLEAR`), exit the loop. Otherwise refine the query and repeat, up to a max iteration cap (e.g., 3) to bound cost.
 
 A secondary tax-focused search (e.g., `"{municipality}" "{state}" ("transient occupancy tax" OR "hotel tax" OR "short-term rental tax") site:.gov OR site:.us`) is part of the loop to capture tax rules hosted separately from zoning codes.
