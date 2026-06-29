@@ -44,6 +44,13 @@ The core financial and legal data must originate from the following primary sour
 - **Step 4: ROI Ranking & Optimal Configuration (Mashvisor API):** For the confirmed legal municipalities, fetch granular STR performance data (Average Daily Rate, Occupancy, Revenue) using the Mashvisor API. The system calculates overall ROI and identifies the most profitable hpme type. Present a financially-ranked shortlist to the user to select their top markets.
 - **Step 5: Synthesis & Deterministic Report Assembly:** Deterministically compute scores/derived fields in Python, generate a short LLM synthesis, and assemble the final YAML report.
 
+## API Cost Controls & Limits
+
+To prevent runaway costs and protect against infinite agent loops, every API used in this pipeline is strictly constrained by a maximum number of calls per user request. 
+- **Enforcement:** The pipeline must track the number of calls made to each API during a single execution.
+- **Failure Mode:** If any API hits its configured maximum limit, the request must immediately fail (abort execution) and return an error to the user.
+- **Configuration:** Limits are defined externally in `specs/api_limits_config.yaml`.
+
 ## Steps Deep-Dive
 
 ### Step 1: Ingestion

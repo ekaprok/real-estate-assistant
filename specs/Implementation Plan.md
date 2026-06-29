@@ -42,6 +42,7 @@ graph TD
 
 *   **Implement Step 3 (Deep Legal Verification)**: Build the `LoopAgent` inside `app/llm.py` that repeatedly queries `serper_search` and scrapes pages to fill out the `LegalStatus` JSON schema.
 *   **Orchestration**: Wire Steps 1-5 together inside `run_pipeline` (`app/pipeline.py`) so `StrReportAgent` simply triggers the funnel and returns the report.
+*   **API Cost Controls**: Implement a call counter in `app/pipeline.py` that enforces the maximum limits defined in `specs/api_limits_config.yaml`. The pipeline must abort immediately if any limit is reached to prevent runaway costs.
 
 ## Architecture & Logic Breakdown
 
@@ -72,6 +73,12 @@ This is not a full agent, but a single-shot structured LLM call via the `google-
 *   **Assembly**: The final output is validated against Pydantic models matching `specs/final_report_template.yaml` and serialized to YAML.
 
 ## Phase 4: Testing & The Quality Flywheel
-*   **Unit & Integration Testing:**
+
+### Hybrid Testing Strategy
+Because the architecture combines agentic reasoning with deterministic scripting, testing must be handled via a hybrid approach:
+1.  **Agentic Tools (Live Web)**: During `agents-cli eval generate`, tools like `serper_search` and `fetch_page` MUST hit the live internet. This ensures the `LoopAgent` is evaluated on its ability to navigate messy, unstructured, real-world data (404s, popups, bad formatting) rather than a clean sandbox.
+2.  **Deterministic Paid APIs (Sandboxed)**: Expensive, highly structured data APIs (Mashvisor, Google Maps Geocoding) are called deterministically by the pipeline. To save money and avoid rate limits during agent eval and unit testing, these calls MUST be mocked or recorded/replayed using `vcrpy` (intercepting the HTTP requests to return local JSON cassettes).
+
+*   **Unit & Integration Testing:** Use `pytest` alongside `vcrpy` to test the deterministic macro-pipeline (Steps 1, 2, 4, 5) without incurring API costs.
 *   **Agent Evaluation:** Run `agents-cli eval generate` and `agents-cli eval grade` to generate traces and grade the LLM calls against the baseline established in Phase 1. Focus on structured output accuracy and the `LoopAgent`'s micro-trajectory.
 *   **Optimize:** Perform code and prompt optimization (`agents-cli eval compare`) until the custom response quality and micro-trajectory metrics pass consistently.

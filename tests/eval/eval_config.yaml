@@ -1,17 +1,19 @@
 metrics_to_run:
   - custom_response_quality
+  - step_2_classification
+  - micro_trajectory_adherence
 
 custom_metrics:
   - name: custom_response_quality
     prompt_template: |
       You are an expert quality assurance evaluator for an enterprise AI assistant. Your task is to evaluate the agent's final response given the user prompt and the full agent trace (for tool-call and reasoning context).
 
-      Please grade the response quality on a scale of 1 to 5 according to the following criteria:
-      1 (Poor): The response fails to address the query, contains incorrect information, or is highly confusing.
-      2 (Below Average): The response partially addresses the query but has notable inaccuracies, gaps, or unclear structure.
-      3 (Acceptable): The response adequately answers the query but lacks depth, clear structure, or misses minor details.
-      4 (Good): The response is accurate, well-structured, and covers the query thoroughly with minor room for improvement.
-      5 (Excellent): The response is highly relevant, comprehensive, flawlessly accurate, and excellently structured.
+      Please grade the response quality on a scale of 1 to 5 according to the following criteria, with strict attention to the output format matching the 'final_report_template.yaml':
+      1 (Poor): The response fails to address the query, contains incorrect information, or completely ignores the required YAML format.
+      2 (Below Average): The response partially addresses the query but has notable inaccuracies, gaps, or significant deviations from the YAML schema.
+      3 (Acceptable): The response adequately answers the query but has minor formatting deviations or lacks depth.
+      4 (Good): The response is accurate, well-structured, thoroughly covers the query, and mostly adheres to the required YAML schema.
+      5 (Excellent): The response is highly relevant, comprehensive, flawlessly accurate, and perfectly adheres to the 'final_report_template.yaml' output schema.
 
       ### Target Evaluation:
       User Prompt: {prompt}
@@ -23,6 +25,62 @@ custom_metrics:
         "score": <integer between 1 and 5>,
         "explanation": "<detailed string explaining the rationale for the score assigned>"
       }
+
+  - name: step_2_classification
+    prompt_template: |
+      You are an expert evaluator grading the agent's Step 2 (Macro Legal Screen) performance.
+
+      Based on the prompt and the agent_data trace, evaluate how accurately the agent classified the target location's macro status against the objectively correct reference.
+
+      The deterministically correct classification is:
+      {reference}
+
+      Score out of 5:
+      1 (Poor): The agent misclassified the location completely (e.g., passing a banned location as allowed, or rejecting a viable one), contradicting the reference.
+      5 (Excellent): The agent correctly identified the macro classification, perfectly matching the provided reference.
+
+      ### Target Evaluation:
+      User Prompt: {prompt}
+      Final Response: {response}
+      Full Agent Trace: {agent_data}
+
+      Return your evaluation as a valid JSON object matching this structure:
+      {
+        "score": <integer between 1 and 5>,
+        "explanation": "<detailed string explaining the rationale for the score assigned>"
+      }
+
+  - name: micro_trajectory_adherence
+    prompt_template: |
+      You are an expert evaluator grading the agent's Step 3 (Deep Legal Verification) trajectory and accuracy.
+
+      Review the 'agent_data' trace and evaluate the agent's actions based on the following rules:
+      1. Did it actually use the 'fetch_page' tool to read zoning codes instead of just guessing from 'serper_search' snippets?
+      2. Did it prioritize scraping official sources (.gov, municode.com, ecode360.com) over random blogs or generic travel sites?
+      3. Did it correctly identify the specific restriction type, and does it match the ground truth reference?
+      4. Did it avoid getting stuck in infinite scraping or search loops?
+
+      The deterministically correct legal status and specific restriction is:
+      {reference}
+
+      Score out of 5:
+      1 (Poor): The agent failed multiple rules (e.g., hallucinated laws, used unofficial sources, looped endlessly) AND/OR completely missed the specific restriction outlined in the reference.
+      2 (Below Average): The agent used tools but relied on snippets, or it found a restriction but it significantly contradicts the reference.
+      3 (Acceptable): The agent followed some trajectory rules and found a restriction that partially aligns with the reference.
+      4 (Good): The agent mostly adhered to the trajectory rules and accurately identified the restriction matching the reference.
+      5 (Excellent): The agent perfectly adhered to all trajectory rules (prioritizing official sources, reading full codes) and extracted the exact specific restriction matching the reference perfectly.
+
+      ### Target Evaluation:
+      User Prompt: {prompt}
+      Final Response: {response}
+      Full Agent Trace: {agent_data}
+
+      Return your evaluation as a valid JSON object matching this structure:
+      {
+        "score": <integer between 1 and 5>,
+        "explanation": "<detailed string explaining the rationale for the score assigned>"
+      }
+
   - name: agent_turn_count
     custom_function: |
       def evaluate(instance):
