@@ -9,15 +9,12 @@ report_metadata:
   generated_at: "2026-06-24T12:00:00Z"
 
   user_inputs:
-    # Geographic scope for the search pipeline (states, regions, metros — resolved to municipalities internally)
     target_locations: ["New Hampshire", "Poconos"]
-    # The ONLY user input: maximum acquisition spend (an existing property, or the land/lot if building).
-    max_budget: 500000
+    desired_home_types: ["Cabin", "Tiny Home"]
 
   data_sources:
     financial_data_source: "Mashvisor"
     legal_data_source: "Serper.dev web search + municipal / Municode / eCode360 / AmLegal scrape"
-    construction_cost_source: "Serper.dev regional cost-per-sqft search + lightweight LLM extraction"
 
 # Ranked shortlist of top municipalities that survived legal, budget, and financial screening (typically 3–5)
 recommended_municipalities:
@@ -33,14 +30,7 @@ recommended_municipalities:
     # Weights used to compute the composite (must sum to 100)
     score_weights:
       cap_rate_yield: 30        # NOI / median property price
-      budget_fit: 25            # Median home value vs max_budget
       legal_friendliness: 20    # ALLOWED > RESTRICTED; penalized for caps, min-stay, primary-residence rules
-  
-    budget_fit:
-      # Affordability is screened on median existing-home value (the reliably sourceable price signal).
-      # Vacant-lot pricing is not reliably available, so it is not used as a hard gate.
-      within_budget: true
-      budget_headroom: 50000  # max_budget minus financial_metrics.median_property_price
 
     # Step 3 Output: Deep Legal Verification
     legal_and_compliance:
@@ -104,29 +94,19 @@ recommended_municipalities:
       bedrooms: 3
       bathrooms: 2.5
       accommodates: 8
-      # Comp-derived amenities that drive ADR/occupancy in this market (qualitative — premiums not quantified)
-      high_impact_amenities: ["Hot Tub", "Mountain View", "Fire Pit"]
+      # high_impact_amenities: DEFERRED to Future work (AirDNA). Mashvisor lists per-listing
+      # amenities but does not attribute ADR/occupancy lift, so this cannot be reliably produced.
+      # high_impact_amenities: ["Hot Tub", "Mountain View", "Fire Pit"]
 
     # Web-search demand context for the market
     demand_drivers: ["Great Smoky Mountains NP gateway", "Ober Mountain ski area", "Dollywood"]
 
-    # Build vs. Buy — compared per municipality. Cost-per-sqft is sourceable; deeper build detail is best-effort.
-    build_vs_buy:
-      recommended_strategy: "Buy Existing"  # Buy Existing | Build from Scratch
-      median_price_per_sqft_buy: 315         # Mashvisor
-      estimated_cost_per_sqft_build: 350     # Web search + LLM regional estimate
-      build_cost_premium_percentage: 11.1    # (build - buy) / buy — positive means building costs more
-      # Single qualitative assessment absorbing land supply, permitting, and construction hurdles.
-      # Exact lot pricing, setbacks, min lot size, impact fees, and utility hookups require local verification
-      # and are not reliably available from automated sources.
-      construction_feasibility: "Steep terrain raises build costs (retaining walls, engineered foundations) and many lots require septic. Buildable-lot supply and precise permitting must be verified locally."
-      notes: "Buying existing inventory currently wins on both cost-per-sqft and time-to-revenue versus building from scratch in this market."
+    # Step 5 Output: Final LLM Synthesis
+    qualitative_synthesis: "Gatlinburg ranks first for 3-bedroom cabins at a 7.8% cap rate, within your $500K budget (median home ~$450K). STRs are viable in tourist overlay zones with low regulatory risk, subject to a tourist-accommodation permit and fire inspection."
 
-    # Step 6 Output: Final LLM Synthesis
-    qualitative_synthesis: "Gatlinburg ranks first for 3-bedroom cabins at a 7.8% cap rate, within your $500K budget (median home ~$450K). STRs are viable in tourist overlay zones with low regulatory risk. Buying existing inventory currently outperforms building, which carries an ~11% per-sqft premium plus septic and steep-slope hurdles."
-
-  # Additional municipalities follow the same structure, ranked 2, 3, etc.
-  # - rank: 2
-  #   location: { municipality: "...", state: "..." }
-  #   municipal_str_score: ...
-  #   ...
+# List of municipalities that were screened out due to STR bans.
+banned_municipalities:
+  - location:
+      municipality: "New York"
+      state: "NY"
+    restriction_reason: "Local Law 18 strictly prohibits short-term rentals under 30 days unless the host is present."
