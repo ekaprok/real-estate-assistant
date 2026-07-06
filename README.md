@@ -1,86 +1,166 @@
-# real-estate-assistant
+# Real Estate Assistant
 
-Simple ReAct agent
-Agent generated with `agents-cli` version `0.5.1`
-
-## Project Structure
-
-```
-real-estate-assistant/
-├── app/         # Core agent code
-│   ├── agent.py               # Main agent logic
-│   └── app_utils/             # App utilities and helpers
-├── tests/                     # Unit, integration, and load tests
-├── GEMINI.md                  # AI-assisted development guide
-└── pyproject.toml             # Project dependencies
-```
-
-> 💡 **Tip:** Use [Gemini CLI](https://github.com/google-gemini/gemini-cli) for AI-assisted development - project context is pre-configured in `GEMINI.md`.
-
-## Requirements
-
-Before you begin, ensure you have:
-- **uv**: Python package manager (used for all dependency management in this project) - [Install](https://docs.astral.sh/uv/getting-started/installation/) ([add packages](https://docs.astral.sh/uv/concepts/dependencies/) with `uv add <package>`)
-- **agents-cli**: Agents CLI - Install with `uv tool install google-agents-cli`
-- **Google Cloud SDK**: For GCP services - [Install](https://cloud.google.com/sdk/docs/install)
-
+The Real Estate Assistant is an AI-powered tool designed to analyze short-term rental (STR) markets. It evaluates the legal landscape (zoning laws, regulations, permits) and financial viability (ROI, Cap Rate, OpEx) of specific municipalities to help real estate investors make data-driven decisions.
 
 ## Quick Start
 
-Install `agents-cli` and its skills if not already installed:
+Follow these steps to get the project running locally.
+
+### 1. Prerequisites
+
+Ensure you have [uv](https://docs.astral.sh/uv/getting-started/installation/) installed. `uv` is an extremely fast Python package manager used for this project.
+
+### 2. Install the Agents CLI
+
+This project uses the Google Agents CLI for development and testing. Install it globally:
 
 ```bash
+uv tool install google-agents-cli
 uvx google-agents-cli setup
 ```
 
-Install required packages:
+
+
+### 3. Install Dependencies
+
+Install the project dependencies using the Agents CLI:
 
 ```bash
 agents-cli install
 ```
 
-Test the agent with a local web server:
+
+
+### 4. Configure API Keys
+
+Before running the project, you need to set up your API keys. Create a `.env` file in the root of the project and add the following variables.
+
+**Note:** The Mashvisor API key (`MASHVISOR_API_KEY_DEV`) is optional if you plan to skip financial calculations using the `--skip-mashvisor` flag (explained below).
+
+```bash
+# .env
+GOOGLE_API_KEY_DEV=your_gemini_api_key
+SERPER_API_KEY_DEV=your_serper_api_key
+GOOGLE_MAPS_API_KEY_DEV=your_maps_api_key
+MASHVISOR_API_KEY_DEV=your_mashvisor_api_key
+```
+
+
+
+### 5. Run the CLI
+
+<div id="command-builder">
+  <table>
+    <thead>
+      <tr>
+        <th>Input</th>
+        <th>Value</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><label for="cb-location">Location</label></td>
+        <td><input type="text" id="cb-location" value="Austin, TX" size="40" placeholder="Austin, TX"></td>
+        <td>Target municipality to analyze (required)</td>
+      </tr>
+      <tr>
+        <td><label for="cb-skip-mashvisor">Skip Mashvisor</label></td>
+        <td>
+          <select id="cb-skip-mashvisor">
+            <option value="false" selected>false</option>
+            <option value="true">true</option>
+          </select>
+        </td>
+        <td>Skip financial calculations; legal/compliance data only</td>
+      </tr>
+      <tr>
+        <td><label for="cb-mock-apis">Mock APIs</label></td>
+        <td>
+          <select id="cb-mock-apis">
+            <option value="false" selected>false</option>
+            <option value="true">true</option>
+          </select>
+        </td>
+        <td>Use mock data instead of live API calls</td>
+      </tr>
+    </tbody>
+  </table>
+  <p><strong>Generated command</strong></p>
+  <pre id="cb-output"><code>uv run python cli.py "Austin, TX"</code></pre>
+  <button type="button" id="cb-copy">Copy command</button>
+</div>
+
+<script>
+(function () {
+  var locationInput = document.getElementById("cb-location");
+  var skipInput = document.getElementById("cb-skip-mashvisor");
+  var mockInput = document.getElementById("cb-mock-apis");
+  var output = document.getElementById("cb-output");
+  var copyButton = document.getElementById("cb-copy");
+
+  if (!locationInput || !skipInput || !mockInput || !output) return;
+
+  function escapeShellArg(value) {
+    return '"' + value.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+  }
+
+  function buildCommand() {
+    var location = locationInput.value.trim() || "Austin, TX";
+    var flags = [];
+    if (skipInput.value === "true") flags.push("--skip-mashvisor");
+    if (mockInput.value === "true") flags.push("--mock-apis");
+    var command = "uv run python cli.py " + escapeShellArg(location);
+    if (flags.length) command += " " + flags.join(" ");
+    return command;
+  }
+
+  function updateCommand() {
+    output.textContent = buildCommand();
+  }
+
+  locationInput.addEventListener("input", updateCommand);
+  skipInput.addEventListener("change", updateCommand);
+  mockInput.addEventListener("change", updateCommand);
+
+  if (copyButton) {
+    copyButton.addEventListener("click", function () {
+      navigator.clipboard.writeText(buildCommand()).then(function () {
+        copyButton.textContent = "Copied!";
+        setTimeout(function () {
+          copyButton.textContent = "Copy command";
+        }, 1500);
+      });
+    });
+  }
+
+  updateCommand();
+})();
+</script>
+
+#### Alternative: Agents CLI
+
+You can also run the Real Estate Assistant through the Google Agents CLI. This path goes through the ADK agent entry point (`app/agent.py`).
+
+Instead of `cli.py` flags, set **Skip Mashvisor** and **Mock APIs** directly in the terminal as environment variables:
+
+```bash
+SKIP_MASHVISOR=true USE_MOCK_APIS=false agents-cli run "Austin, TX"
+```
+
+The input should be a target location (e.g., `"Austin, TX"` or `"Can I operate a short term rental in Jersey City, NJ?"`).
+
+## Run the Playground
+
+Launch a local web UI for interactive testing. The server auto-reloads when you save changes to agent code:
 
 ```bash
 agents-cli playground
 ```
 
-You can also use features from the [ADK](https://adk.dev/) CLI with `uv run adk`.
+Use the playground when you want to iterate on prompts, inspect agent behavior, or demo the assistant in a browser.
 
-## Commands
+## Project Structure
 
-| Command              | Description                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------- |
-| `agents-cli install` | Install dependencies using uv                                                         |
-| `agents-cli playground` | Launch local development environment                                                  |
-| `agents-cli lint`    | Run code quality checks                                                               |
-| `agents-cli eval`    | Evaluate agent behavior (generate, grade, analyze, and more — see `agents-cli eval --help`) |
-| `uv run pytest tests/unit tests/integration` | Run unit and integration tests                                                        |
-
-## 🛠️ Project Management
-
-| Command | What It Does |
-|---------|--------------|
-| `agents-cli scaffold enhance` | Add CI/CD pipelines and Terraform infrastructure |
-| `agents-cli infra cicd` | One-command setup of entire CI/CD pipeline + infrastructure |
-| `agents-cli scaffold upgrade` | Auto-upgrade to latest version while preserving customizations |
-
----
-
-## Development
-
-Edit your agent logic in `app/agent.py` and test with `agents-cli playground` - it auto-reloads on save.
-
-## Deployment
-
-```bash
-gcloud config set project <your-project-id>
-agents-cli deploy
-```
-
-To add CI/CD and Terraform, run `agents-cli scaffold enhance`.
-To set up your production infrastructure, run `agents-cli infra cicd`.
-
-## Observability
-
-Built-in telemetry exports to Cloud Trace, BigQuery, and Cloud Logging.
+- `app/`: Core agent code and pipeline logic.
+- `tests/`: Unit and integration tests.

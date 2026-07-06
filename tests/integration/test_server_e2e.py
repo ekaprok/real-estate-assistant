@@ -57,6 +57,7 @@ def start_server() -> subprocess.Popen[str]:
     ]
     env = os.environ.copy()
     env["INTEGRATION_TEST"] = "TRUE"
+    env["USE_MOCK_APIS"] = "True"
     process = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,

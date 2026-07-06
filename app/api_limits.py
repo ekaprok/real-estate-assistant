@@ -59,6 +59,8 @@ def init_api_counts(
     """
     if reset:
         api_call_counts.set({})
+        if limits is None:
+            api_limits.set(None)
     if isinstance(limits, int):
         api_limits.set(build_api_limits(limits))
     elif limits is not None:

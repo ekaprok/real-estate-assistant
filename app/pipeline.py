@@ -91,11 +91,13 @@ def generate_research_prompt(municipality: str, state: str, county: str) -> str:
     )
 
 
-def run_pipeline(user_prompt: str) -> str:
+def run_pipeline(user_prompt: str, skip_mashvisor: bool | None = None) -> str:
     """Runs the 5-step real estate analysis pipeline deterministically.
 
     Enforces API call limits and handles mock fallbacks. Returns the YAML report.
     """
+    if skip_mashvisor is None:
+        skip_mashvisor = os.environ.get("SKIP_MASHVISOR", "False").lower() == "true"
     # 1. Initialize API call counters for this run
     logger.info(f"Starting pipeline with user prompt: '{user_prompt}'")
     init_api_counts()
@@ -103,6 +105,14 @@ def run_pipeline(user_prompt: str) -> str:
     try:
         # Step 1: Ingestion & Parse prompt
         inputs = parse_user_prompt(user_prompt)
+
+        if not inputs.is_valid_location_query or not inputs.target_locations:
+            logger.warning(f"Invalid location query or no locations found: {user_prompt}")
+            error_report = {
+                "error": "Invalid input",
+                "message": "Please provide valid target locations to analyze short-term rental rules, such as 'Austin, TX'."
+            }
+            return yaml.dump(error_report, default_flow_style=False, sort_keys=False)
 
         logger.info(f"Step 1: Parsed inputs -> locations: {inputs.target_locations}")
 
@@ -223,6 +233,42 @@ def run_pipeline(user_prompt: str) -> str:
             state = muni["state"]
             legal = item["legal"]
 
+            if skip_mashvisor:
+                logger.info(f"Step 4: Skipping Mashvisor API for {name}, {state}...")
+                survived_municipalities.append({
+                    "location": {
+                        "municipality": name,
+                        "state": state,
+                        "county": muni.get("county", "")
+                    },
+                    "legal_and_compliance": {
+                        "status": legal.status,
+                        "restriction_reason": legal.restriction_reason,
+                        "eligible_zones_summary": legal.eligible_zones_summary,
+                        "primary_residence_required": legal.primary_residence_required,
+                        "minimum_stay_days": legal.minimum_stay_days,
+                        "permit_cap_exists": legal.permit_cap_exists,
+                        "permits": [
+                            {
+                                "name": p.name,
+                                "process_summary": p.process_summary,
+                                "application_url": p.application_url
+                            } for p in legal.permits
+                        ],
+                        "special_taxes": [
+                            {
+                                "name": t.name,
+                                "rate": t.rate,
+                                "description": t.description
+                            } for t in legal.special_taxes
+                        ],
+                        "regulatory_trajectory_risk": legal.regulatory_trajectory_risk,
+                        "summary_of_restrictions": legal.summary_of_restrictions
+                    },
+                    "hoa_disclaimer": "Resort and planned communities in this market commonly carry HOAs whose CC&Rs may restrict STRs. This system verifies only government zoning/law — confirm HOA rules independently before closing."
+                })
+                continue
+
             # Fetch Mashvisor financial data
             logger.info(f"Step 4: Querying Mashvisor financial metrics for {name}, {state}...")
             mv_data = query_mashvisor_api(name, state)
@@ -326,10 +372,11 @@ def run_pipeline(user_prompt: str) -> str:
             })
 
         # Sort survived municipalities by municipal_str_score descending
-        survived_municipalities.sort(key=lambda x: x["municipal_str_score"], reverse=True)
-        # Assign rank based on sorted order
-        for idx, rec in enumerate(survived_municipalities):
-            rec["rank"] = idx + 1
+        if not skip_mashvisor:
+            survived_municipalities.sort(key=lambda x: x.get("municipal_str_score", 0), reverse=True)
+            # Assign rank based on sorted order
+            for idx, rec in enumerate(survived_municipalities):
+                rec["rank"] = idx + 1
 
         # Build final report yaml
         report = {
