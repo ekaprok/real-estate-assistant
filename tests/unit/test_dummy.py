@@ -25,13 +25,13 @@ def test_api_limits_tracking():
     increment_api_count("google_maps_geocoding")
     counts = get_current_counts()
     assert counts["google_maps_geocoding"] == 2
-    assert counts["overpass_api"] == 0
+    # Counters are created lazily, so an un-called API simply isn't present yet.
+    assert counts.get("overpass_api", 0) == 0
 
 def test_api_limits_enforcement():
-    init_api_counts()
+    init_api_counts(1)
 
-    # Intentionally trigger limit violation for overpass_api
-    # Limit is 5 in app/api_limits.py
+    # Intentionally trigger limit violation for overpass_api (limit = 2 + 1*1 = 3)
     with pytest.raises(ApiLimitExceededError) as exc_info:
         for _ in range(25):
             increment_api_count("overpass_api")
@@ -90,3 +90,15 @@ def test_fetch_page_mock():
     res = fetch_page("https://www.nyc.gov/site/specialenforcement/registration-law/registration-law-for-hosts.page")
     assert "url" in res
     assert "Local Law 18" in res["text"]
+
+def test_filter_str_relevant_text():
+    from app.tools import filter_str_relevant_text
+
+    text = "Welcome to our city website. " * 50
+    text += "Short-term rental permits require a minimum stay of 30 days in residential zones."
+    text += " Contact us for more information. " * 50
+
+    filtered = filter_str_relevant_text(text)
+    assert "short-term rental" in filtered.lower()
+    assert len(filtered) <= 3000
+    assert len(filtered) < len(text)

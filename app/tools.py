@@ -34,6 +34,58 @@ except ImportError:
     MOCK_SEARCH_RESULTS = {}
     MOCK_PAGES = {}
 
+STR_RELEVANCE_ANCHORS = [
+    "short-term rental",
+    "short term rental",
+    "vacation rental",
+    "transient occupancy",
+    "transient lodging",
+    "zoning",
+    "permit",
+    "minimum stay",
+    "primary residence",
+    "vacation dwelling",
+    "yurt",
+    "rv",
+    "tiny home",
+    "accessory dwelling",
+    "temporary structure",
+    "hotel tax",
+    "occupancy tax",
+]
+
+def filter_str_relevant_text(text: str, window: int = 500, max_chars: int = 3000) -> str:
+    """Extract STR-relevant windows around anchor terms to reduce LLM input tokens."""
+    if not text:
+        return text
+
+    text_lower = text.lower()
+    spans: list[tuple[int, int]] = []
+    for anchor in STR_RELEVANCE_ANCHORS:
+        start = 0
+        anchor_lower = anchor.lower()
+        while True:
+            idx = text_lower.find(anchor_lower, start)
+            if idx == -1:
+                break
+            spans.append((max(0, idx - window), min(len(text), idx + len(anchor) + window)))
+            start = idx + len(anchor)
+
+    if not spans:
+        return text[:3000]
+
+    spans.sort()
+    merged: list[tuple[int, int]] = []
+    for span_start, span_end in spans:
+        if merged and span_start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], span_end))
+        else:
+            merged.append((span_start, span_end))
+
+    chunks = [text[s:e].strip() for s, e in merged]
+    filtered = " ... ".join(chunks)
+    return filtered[:max_chars]
+
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=10),
@@ -115,14 +167,15 @@ def fetch_page(url: str) -> dict:
     """
     increment_api_count("web_scraper_fetch_page")
 
-    # Check mock pages first
-    if url in MOCK_PAGES:
-        return {"url": url, "text": MOCK_PAGES[url]}
+    if USE_MOCK_APIS:
+        # Check mock pages first
+        if url in MOCK_PAGES:
+            return {"url": url, "text": MOCK_PAGES[url]}
 
-    # Check if it is a mock domain or placeholder
-    if any(p in url for p in ["localhost", "example.com", "municode-mock"]):
-        # Return generic mock zoning
-        return {"url": url, "text": "This zoning code permits short term rentals subject to local registration and safety rules."}
+        # Check if it is a mock domain or placeholder
+        if any(p in url for p in ["localhost", "example.com", "municode-mock"]):
+            # Return generic mock zoning
+            return {"url": url, "text": "This zoning code permits short term rentals subject to local registration and safety rules."}
 
     # Real Scrape HTTP Call with tenacity retry
     try:
@@ -137,16 +190,18 @@ def fetch_page(url: str) -> dict:
         text = soup.get_text(separator=" ").strip()
         # Clean up whitespace
         text = " ".join(text.split())
-        # Truncate to first 8000 characters to protect context length
-        text = text[:8000]
+        text = filter_str_relevant_text(text)
 
         return {"url": url, "text": text}
     except Exception as e:
-        logger.error(f"Web scraper call failed after retries for URL {url}: {e}. Falling back to mock.")
-        # Fallback if scraping fails
+        logger.error(f"Web scraper call failed after retries for URL {url}: {e}.")
         fallback_text = "Error: Page could not be accessed. The site may block scrapers or is down. Please try a different search or source."
-        for m_url, m_text in MOCK_PAGES.items():
-            if m_url in url or url in m_url:
-                fallback_text = m_text
-                break
+
+        if USE_MOCK_APIS:
+            logger.error(f"Falling back to mock.")
+            for m_url, m_text in MOCK_PAGES.items():
+                if m_url in url or url in m_url:
+                    fallback_text = m_text
+                    break
+
         return {"url": url, "text": fallback_text}

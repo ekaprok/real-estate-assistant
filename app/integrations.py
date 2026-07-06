@@ -128,8 +128,7 @@ def query_mashvisor_api(municipality: str, state: str) -> dict:
 
     mashvisor_key = os.environ.get("MASHVISOR_API_KEY_DEV")
 
-    useMocks = True
-    if USE_MOCK_APIS or useMocks:
+    if USE_MOCK_APIS:
         logger.info(f"Using mock Mashvisor data for {municipality}, {state}.")
         result = MOCK_MASHVISOR_DB.get(municipality)
         if result is None:

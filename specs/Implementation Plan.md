@@ -42,7 +42,7 @@ graph TD
 
 *   **Implement Step 3 (Deep Legal Verification)**: Build the `LoopAgent` inside `app/llm.py` that repeatedly queries `serper_search` and scrapes pages to fill out the `LegalStatus` JSON schema.
 *   **Orchestration**: Wire Steps 1-5 together inside `run_pipeline` (`app/pipeline.py`) so `StrReportAgent` simply triggers the funnel and returns the report.
-*   **API Cost Controls**: Implement a call counter in `app/pipeline.py` that enforces the maximum limits defined in `app/api_limits.py`. The pipeline must abort immediately if any limit is reached to prevent runaway costs. All LLM calls (both single-shot and LoopAgent) use `gemini-3.5-flash` to optimize for resourcefulness.
+*   **API Cost Controls**: Implement a call counter in `app/pipeline.py` that enforces the maximum limits defined in `app/api_limits.py`. Agentic loop APIs (Serper, fetch, loop-LLM) use static backstop limits; deterministic APIs (geocoding, Mashvisor, single-shot LLM) scale with input size. Per-municipality legal failures degrade to `undetermined_municipalities` rather than aborting the whole request. LLM tiering: `gemini-3.1-flash-lite` for parse/macro/synthesis and the research executor; `gemini-3.5-flash` for the research evaluator and structured legal extraction.
 
 ## Architecture & Logic Breakdown
 

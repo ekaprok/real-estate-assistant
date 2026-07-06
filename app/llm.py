@@ -31,6 +31,10 @@ from app.api_limits import increment_api_count
 from app.tools import serper_search, fetch_page
 from app.app_utils.cache import with_cache
 
+# Explicit model tiers (see specs/Implementation Plan.md)
+FLASH_LITE_MODEL = "gemini-3.1-flash-lite"
+DEEP_LEGAL_MODEL = "gemini-3.5-flash"
+
 # Pydantic models for structured outputs
 class IngestedInputs(BaseModel):
     target_locations: list[str] = Field(default_factory=list)
@@ -92,19 +96,24 @@ def get_genai_client() -> genai.Client:
 
 
 from app.app_utils.cache import get_cached_response, set_cached_response
+from app.mock_handlers import mock_gemini_response, _use_mock_apis
 
-def call_gemini_flash(prompt: str, response_schema: type[BaseModel] | None = None) -> str | BaseModel:
-    """Calls Gemini Flash and increments call counter. Caches queries to save costs."""
+def call_gemini_flash(
+    prompt: str,
+    response_schema: type[BaseModel] | None = None,
+    model: str = FLASH_LITE_MODEL,
+) -> str | BaseModel:
+    """Calls Gemini and increments call counter. Caches queries to save costs."""
     import hashlib
     schema_name = response_schema.__name__ if response_schema else "None"
-    val = f"{prompt}_{schema_name}".lower()
+    val = f"{prompt}_{schema_name}_{model}".lower()
     args_hash = hashlib.md5(val.encode("utf-8")).hexdigest()
 
     use_mock = os.environ.get("USE_MOCK_APIS", "False").lower() == "true"
     if use_mock:
-        cache_key = f"mock_llm_{args_hash}"
-    else:
-        cache_key = f"llm_{args_hash}"
+        return mock_gemini_response(prompt, response_schema)
+
+    cache_key = f"llm_{args_hash}"
 
     cached = get_cached_response(cache_key)
     if cached is not None:
@@ -116,12 +125,12 @@ def call_gemini_flash(prompt: str, response_schema: type[BaseModel] | None = Non
                 return response_schema.parse_obj(cached)
         return cached
 
+    if _use_mock_apis():
+        return mock_gemini_response(prompt, response_schema)
+
     # Cache miss
     increment_api_count("llm_gemini_flash")
     client = get_genai_client()
-
-    # Use standard 1.5 Flash model
-    model_name = "gemini-3.5-flash"
 
     config = types.GenerateContentConfig()
     if response_schema:
@@ -129,7 +138,7 @@ def call_gemini_flash(prompt: str, response_schema: type[BaseModel] | None = Non
         config.response_schema = response_schema
 
     response = client.models.generate_content(
-        model=model_name,
+        model=model,
         contents=prompt,
         config=config
     )
@@ -171,20 +180,41 @@ def check_evaluation(ctx: Context, node_input: dict):
         logger.info(f"[check_evaluation] Research failed (iteration {iterations}). Loop continues.")
         return Event(route="fail", state=state_delta, output="Continue research based on feedback.")
 
+@node
+def finish_research(ctx: Context, node_input: dict):
+    """Terminal node: research loop complete; research_findings remains in session state."""
+    logger.info("[finish_research] Research loop complete.")
+    return Event(output="Research complete.")
+
 # ADK agent for deep research loop
 def get_deep_legal_loop_agent() -> Workflow:
     research_executor = LlmAgent(
         name="research_executor",
-        model="gemini-3.5-flash",
+        model=FLASH_LITE_MODEL,
         instruction="""
 You are an expert real-estate zoning researcher. Your goal is to gather facts on short-term rental (STR) legality and regulations for a specific municipality.
+
 Use serper_search and fetch_page to find and read municipal codes and local ordinances.
-Find out:
+
+ANTI-HALLUCINATION RULES (mandatory):
+- Only state facts you have read via fetch_page. Never invent ordinance numbers, rates, dates, or permit names.
+- Prioritize official/authoritative sources: .gov, .us, municode.com, ecode360.com, amlegal.com. Scrape the top 2-3 highest-confidence URLs per iteration.
+- Attach the source URL to each factual claim in your summary.
+- If a fact (permit cap, minimum stay, tax rate, ordinance text) is not found in scraped text, write "NOT FOUND / UNCLEAR" for that fact — do not guess.
+- Stop issuing further searches once you have conclusively determined the info is unavailable after targeted attempts.
+
+Research checklist:
 1. Is STR allowed, restricted, or banned?
-2. Specific rules, minimum stay requirements, permit caps, required permits, and special taxes.
+2. Specific rules: minimum stay requirements, permit caps, required permits, and special taxes.
 3. Regulatory trajectory or local debate.
-If this is a follow-up, you must also address the feedback and follow_up_queries provided in the 'research_evaluation' state. Execute new targeted searches for any missing information.
-Synthesize all your findings into a comprehensive research summary.
+4. Unique stays rules (yurts, RVs, tiny homes, cabins, temporary structures) — always research these.
+
+Prior evaluator feedback (if any):
+{research_evaluation?}
+
+If feedback is present, address the comment and execute follow_up_queries with new targeted searches for missing information only. Do not repeat searches that already succeeded.
+
+Synthesize all findings into a comprehensive research summary with source URLs cited.
 """,
         tools=[serper_search, fetch_page],
         before_model_callback=count_agent_model_call,
@@ -193,30 +223,23 @@ Synthesize all your findings into a comprehensive research summary.
 
     research_evaluator = LlmAgent(
         name="research_evaluator",
-        model="gemini-3.5-flash",
+        model=DEEP_LEGAL_MODEL,
         instruction="""
 You are a meticulous evaluator. Review the research in 'research_findings'.
+
 Does it clearly answer:
 1. If STR is allowed/restricted/banned?
 2. Specific minimum stays, caps, permits, taxes?
 3. Regulatory trajectory?
-4. Unique stays rules (e.g. yurts, RVs, temporary structures)?
-Grade 'pass' only if all details (including unique stays) are found or conclusively proven unavailable. Otherwise grade 'fail' and provide explicit follow-up queries targeting the exact missing information.
+4. Unique stays rules (e.g. yurts, RVs, tiny homes, cabins, temporary structures)?
+
+Grade 'pass' only if all details (including unique stays) are found or conclusively proven unavailable in official sources. Otherwise grade 'fail' and provide explicit follow_up_queries targeting the exact missing information.
+
+Verify that claims are grounded in scraped source text with URLs — fail if the research appears to guess or lacks source citations for key facts.
 """,
         output_schema=Feedback,
         output_key="research_evaluation",
         before_model_callback=count_agent_model_call,
-    )
-
-    report_composer = LlmAgent(
-        name="report_composer",
-        model="gemini-3.5-flash",
-        instruction="""
-Format the final research findings from 'research_findings' into a single coherent summary document.
-Do not perform any new searches.
-""",
-        before_model_callback=count_agent_model_call,
-        output_key="final_research_summary",
     )
 
     edges = [
@@ -224,7 +247,7 @@ Do not perform any new searches.
         (research_executor, research_evaluator),
         (research_evaluator, check_evaluation),
         (check_evaluation, {
-            "pass": report_composer,
+            "pass": finish_research,
             "fail": research_executor
         })
     ]
@@ -283,10 +306,12 @@ Analyze the zoning research summary for {municipality}, {state}. Ensure that the
 Extract and fill out the structured LegalStatus JSON matching the required schema.
 Evaluate if unique stays / temporary structures (e.g. Yurts, RVs) are prohibited or restricted.
 
+If the research summary does not contain conclusive evidence of STR legality (allowed, restricted, or banned), set status to "UNCLEAR" and set restriction_reason and summary_of_restrictions to state that STR regulations could not be found/confirmed for {municipality}, {state}. Do not invent facts not present in the summary.
+
 Zoning research summary:
 {research_summary}
 """
-    return call_gemini_flash(prompt, response_schema=LegalStatus)
+    return call_gemini_flash(prompt, response_schema=LegalStatus, model=DEEP_LEGAL_MODEL)
 
 
 # Step 5: Synthesis

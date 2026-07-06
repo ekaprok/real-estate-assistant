@@ -110,3 +110,10 @@ banned_municipalities:
       municipality: "New York"
       state: "NY"
     restriction_reason: "Local Law 18 strictly prohibits short-term rentals under 30 days unless the host is present."
+
+# Municipalities where legal verification could not be completed (API budget exhausted or research inconclusive).
+undetermined_municipalities:
+  - location:
+      municipality: "Example City"
+      state: "XX"
+    reason: "Legal verification could not be completed: research/API budget exhausted"

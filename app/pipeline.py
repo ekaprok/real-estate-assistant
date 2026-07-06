@@ -1,13 +1,19 @@
 import os
 import yaml
 import logging
+import asyncio
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types as genai_types
-from app.api_limits import init_api_counts, get_current_counts, ApiLimitExceededError, API_LIMITS
+from app.api_limits import (
+    init_api_counts,
+    get_current_counts,
+    ApiLimitExceededError,
+    _get_limit,
+)
 from app.integrations import geocode_location, query_mashvisor_api
 from app.llm import (
     parse_user_prompt,
@@ -27,9 +33,16 @@ from app.app_utils.finance import (
 
 from app.app_utils.cache import with_cache, get_cached_response, set_cached_response
 
+from app.mock_handlers import mock_research_summary, _use_mock_apis
+
+USE_MOCK_APIS = os.environ.get("USE_MOCK_APIS", "False").lower() == "true"
+
 @with_cache("agent_run")
 async def run_agent(agent, prompt: str) -> str:
     """Helper to run the DeepLegalLoopAgent ReAct loop asynchronously via Runner."""
+    if _use_mock_apis():
+        return mock_research_summary(prompt)
+
     session_service = InMemorySessionService()
     session = await session_service.create_session(user_id="pipeline_user", app_name="pipeline")
     runner = Runner(agent=agent, session_service=session_service, app_name="pipeline")
@@ -39,30 +52,34 @@ async def run_agent(agent, prompt: str) -> str:
         parts=[genai_types.Part.from_text(text=prompt)]
     )
 
-    events = []
-    async for event in runner.run_async(
-        new_message=new_message,
+    response_text = ""
+    try:
+        async for event in runner.run_async(
+            new_message=new_message,
+            user_id="pipeline_user",
+            session_id=session.id,
+        ):
+            if event.error_code:
+                if event.error_code == "ApiLimitExceededError":
+                    raise ApiLimitExceededError(
+                        "llm_gemini_flash_loop",
+                        _get_limit("llm_gemini_flash_loop"),
+                    )
+                raise RuntimeError(f"Agent execution failed: {event.error_message} ({event.error_code})")
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        response_text += part.text
+    except ApiLimitExceededError:
+        raise
+
+    refreshed = await session_service.get_session(
+        app_name="pipeline",
         user_id="pipeline_user",
         session_id=session.id,
-    ):
-        events.append(event)
-
-    response_text = ""
-    for event in events:
-        if event.error_code:
-            if event.error_code == "ApiLimitExceededError":
-                # Find current count if possible or use limit from config
-                limit = API_LIMITS.get("llm_gemini_flash_loop", 10)
-                raise ApiLimitExceededError("llm_gemini_flash_loop", limit)
-            raise RuntimeError(f"Agent execution failed: {event.error_message} ({event.error_code})")
-        if event.content and event.content.parts:
-            for part in event.content.parts:
-                if part.text:
-                    response_text += part.text
-
-    final_summary = session.state.get("final_research_summary")
-    if final_summary:
-        return str(final_summary)
+    )
+    if refreshed and refreshed.state.get("research_findings"):
+        return str(refreshed.state["research_findings"])
 
     return response_text
 
@@ -79,7 +96,7 @@ def run_pipeline(user_prompt: str) -> str:
 
     Enforces API call limits and handles mock fallbacks. Returns the YAML report.
     """
-    # 1. Initialize API call counts in this context
+    # 1. Initialize API call counters for this run
     logger.info(f"Starting pipeline with user prompt: '{user_prompt}'")
     init_api_counts()
 
@@ -88,6 +105,8 @@ def run_pipeline(user_prompt: str) -> str:
         inputs = parse_user_prompt(user_prompt)
 
         logger.info(f"Step 1: Parsed inputs -> locations: {inputs.target_locations}")
+
+        num_locations = max(len(inputs.target_locations), 1)
 
         # Step 1.5: Geographic Resolution
         resolved_municipalities = []
@@ -102,6 +121,9 @@ def run_pipeline(user_prompt: str) -> str:
                     resolved_municipalities.append(res)
         logger.info(f"Resolved municipalities to process: {resolved_municipalities}")
 
+        num_municipalities = len(resolved_municipalities)
+        init_api_counts(num_municipalities, reset=False)
+
         # Check Final Report Cache based on resolved parameters
         # Sort municipalities to guarantee consistent order
         muni_keys = sorted([(m["municipality"].lower(), m["state"].lower()) for m in resolved_municipalities])
@@ -114,19 +136,22 @@ def run_pipeline(user_prompt: str) -> str:
         args_hash = hashlib.md5(key_str.encode("utf-8")).hexdigest()
 
         use_mock = os.environ.get("USE_MOCK_APIS", "False").lower() == "true"
-        cache_key = f"mock_report_{args_hash}" if use_mock else f"report_{args_hash}"
+        if use_mock:
+            cache_key = None
+        else:
+            cache_key = f"report_{args_hash}"
+            cached = get_cached_response(cache_key)
+            if cached is not None:
+                logger.info(f"Cache hit for report key {cache_key}")
+                logger.info(f"Final Report:\n{cached}")
+                return cached
 
-        cached = get_cached_response(cache_key)
-        if cached is not None:
-            logger.info(f"Cache hit for report key {cache_key}")
-            logger.info(f"Final Report:\n{cached}")
-            return cached
-
-        logger.info(f"Cache miss for report key {cache_key}")
+            logger.info(f"Cache miss for report key {cache_key}")
 
         # Step 2: Macro Legal Screen & Step 3: Deep Legal Loop
         surviving_municipalities = []
         banned_municipalities = []
+        undetermined_municipalities = []
 
         deep_research_agent = get_deep_legal_loop_agent()
 
@@ -135,47 +160,60 @@ def run_pipeline(user_prompt: str) -> str:
             state = muni["state"]
             county = muni.get("county", "")
 
-            # Step 2: Macro Legal Screen
-            logger.info(f"Step 2: Running macro legal screen for {name}, {state}...")
-            macro_res = run_macro_legal_screen(name, state)
-            logger.info(f"Macro legal screen result for {name}, {state}: {macro_res.status}")
+            try:
+                # Step 2: Macro Legal Screen
+                logger.info(f"Step 2: Running macro legal screen for {name}, {state}...")
+                macro_res = run_macro_legal_screen(name, state)
+                logger.info(f"Macro legal screen result for {name}, {state}: {macro_res.status}")
 
-            if macro_res.status == "BANNED":
-                logger.info(f"Municipality {name}, {state} is BANNED (Reason: {macro_res.restriction_reason})")
-                banned_municipalities.append({
+                if macro_res.status == "BANNED":
+                    logger.info(f"Municipality {name}, {state} is BANNED (Reason: {macro_res.restriction_reason})")
+                    banned_municipalities.append({
+                        "location": {
+                            "municipality": name,
+                            "state": state
+                        },
+                        "restriction_reason": macro_res.restriction_reason
+                    })
+                    continue
+
+                # Step 3: Deep Legal Verification (LoopAgent ReAct)
+                research_prompt = generate_research_prompt(name, state, county)
+                logger.info(f"Step 3: Executing Deep Legal verification loop for {name}, {state}...")
+                research_summary = asyncio.run(run_agent(deep_research_agent, research_prompt))
+
+                # Extract structured LegalStatus
+                legal_status = extract_legal_status(name, state, research_summary)
+                logger.info(f"Deep Legal verification status for {name}, {state}: {legal_status.status}")
+
+                if legal_status.status == "BANNED":
+                    logger.info(f"Municipality {name}, {state} failed deep verification (Reason: {legal_status.restriction_reason})")
+                    banned_municipalities.append({
+                        "location": {
+                            "municipality": name,
+                            "state": state
+                        },
+                        "restriction_reason": legal_status.restriction_reason
+                    })
+                    continue
+
+                logger.info(f"Municipality {name}, {state} passed legal verification. Adding to surviving list.")
+                surviving_municipalities.append({
+                    "muni": muni,
+                    "legal": legal_status
+                })
+            except (ApiLimitExceededError, RuntimeError) as e:
+                logger.warning(
+                    f"Legal verification could not be completed for {name}, {state}: {e}"
+                )
+                undetermined_municipalities.append({
                     "location": {
                         "municipality": name,
                         "state": state
                     },
-                    "restriction_reason": macro_res.restriction_reason
+                    "reason": f"Legal verification could not be completed: {e}",
                 })
                 continue
-
-            # Step 3: Deep Legal Verification (LoopAgent ReAct)
-            research_prompt = generate_research_prompt(name, state, county)
-            logger.info(f"Step 3: Executing Deep Legal verification loop for {name}, {state}...")
-            research_summary = run_agent(deep_research_agent, research_prompt)
-
-            # Extract structured LegalStatus
-            legal_status = extract_legal_status(name, state, research_summary)
-            logger.info(f"Deep Legal verification status for {name}, {state}: {legal_status.status}")
-
-            if legal_status.status == "BANNED":
-                logger.info(f"Municipality {name}, {state} failed deep verification (Reason: {legal_status.restriction_reason})")
-                banned_municipalities.append({
-                    "location": {
-                        "municipality": name,
-                        "state": state
-                    },
-                    "restriction_reason": legal_status.restriction_reason
-                })
-                continue
-
-            logger.info(f"Municipality {name}, {state} passed legal verification. Adding to surviving list.")
-            surviving_municipalities.append({
-                "muni": muni,
-                "legal": legal_status
-            })
 
         # Step 4: ROI Ranking & Optimal Configuration (Mashvisor)
         survived_municipalities = []
@@ -306,14 +344,16 @@ def run_pipeline(user_prompt: str) -> str:
                 }
             },
             "survived_municipalities": survived_municipalities,
-            "banned_municipalities": banned_municipalities
+            "banned_municipalities": banned_municipalities,
+            "undetermined_municipalities": undetermined_municipalities,
         }
 
         report_yaml = yaml.dump(report, default_flow_style=False, sort_keys=False)
         logger.info(f"Final Report:\n{report_yaml}")
 
-        # Save to cache
-        set_cached_response(cache_key, report_yaml)
+        # Save to cache if not using mock APIs
+        if cache_key is not None:
+            set_cached_response(cache_key, report_yaml)
 
         logger.info(f"Pipeline completed successfully. API call counts: {get_current_counts()}")
         return report_yaml

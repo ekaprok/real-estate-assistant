@@ -106,9 +106,9 @@ def with_cache(prefix: str):
                     use_mock = True
 
             if use_mock:
-                cache_key = f"mock_prefix_{prefix}_{args_hash}" if prefix == "report" else f"mock_{prefix}_{args_hash}"
-            else:
-                cache_key = f"{prefix}_{args_hash}"
+                return None, None, False
+
+            cache_key = f"{prefix}_{args_hash}"
 
             cached = get_cached_response(cache_key)
             if cached is not None:
@@ -141,8 +141,8 @@ def with_cache(prefix: str):
                 logger.info(f"Cache miss for key {cache_key} (func: {func.__name__})")
                 result = await func(*args, **kwargs)
 
-                # Save to cache if result is valid and not empty/None
-                if result is not None:
+                # Save to cache if result is valid and not empty/None and not in mock mode
+                if result is not None and cache_key is not None:
                     set_cached_response(cache_key, result)
                 return result
         else:
@@ -155,8 +155,8 @@ def with_cache(prefix: str):
                 logger.info(f"Cache miss for key {cache_key} (func: {func.__name__})")
                 result = func(*args, **kwargs)
 
-                # Save to cache if result is valid and not empty/None
-                if result is not None:
+                # Save to cache if result is valid and not empty/None and not in mock mode
+                if result is not None and cache_key is not None:
                     set_cached_response(cache_key, result)
                 return result
         return wrapper
