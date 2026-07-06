@@ -16,6 +16,9 @@ dependencies = [
     "pre-commit",
     "pre-commit-hooks",
     "semgrep",
+    "beautifulsoup4",
+    "pyyaml",
+    "tenacity",
 ]
 requires-python = ">=3.11,<3.14"
 

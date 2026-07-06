@@ -23,8 +23,8 @@ API calls for premium real estate data and LLM processing are expensive. Running
 The core financial and legal data must originate from the following primary sources:
 
 1. **Google Maps Geocoding API & Overpass API**
-   - **Purpose:** Resolving colloquial regions (e.g., "Poconos") into specific municipalities.
-   - **Cost:** Google Maps Geocoding is effectively free under 40,000 queries/month. Overpass API is 100% free and open source.
+   - **Purpose:** Google Maps Geocoding converts addresses or colloquial regions (e.g., "Poconos") into precise geographic coordinates or bounding boxes. The Overpass API is then used to query the OpenStreetMap database to extract complex geographical boundaries (e.g., returning all specific municipalities, towns, or administrative boundaries contained within that bounding box), a capability Google Maps lacks natively.
+   - **Cost & Limits:** Google Maps Geocoding is effectively free under 40,000 queries/month. Public Overpass API instances (like `overpass-api.de`) are 100% free but enforce strict fair-use limits (max ~10,000 requests/day, 1 GB data/day, no parallel requests, and mandatory custom User-Agent headers). High-volume or commercial scaling requires a paid managed instance (e.g., Geofabrik) or self-hosting the OSM database.
 2. **Web Search (Serper.dev)**
    - **Purpose:** Google SERP API (snippets + result URLs) plus an HTTP page-fetch/scrape tool that retrieves the full text of those URLs for legal verification.
    - **Cost:** ~$0.30–$1.00 per 1,000 queries. Provides high-quality snippets at a fraction of the cost of other search APIs.
@@ -46,7 +46,7 @@ The core financial and legal data must originate from the following primary sour
 
 ## API Cost Controls & Limits
 
-To prevent runaway costs and protect against infinite agent loops, every API used in this pipeline is strictly constrained by a maximum number of calls per user request. 
+To prevent runaway costs and protect against infinite agent loops, every API used in this pipeline is strictly constrained by a maximum number of calls per user request.
 - **Enforcement:** The pipeline must track the number of calls made to each API during a single execution.
 - **Failure Mode:** If any API hits its configured maximum limit, the request must immediately fail (abort execution) and return an error to the user.
 - **Configuration:** Limits are defined externally in `specs/api_limits_config.yaml`.
