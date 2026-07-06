@@ -82,7 +82,7 @@ def call_gemini_flash(prompt: str, response_schema: type[BaseModel] | None = Non
     client = get_genai_client()
 
     # Use standard 1.5 Flash model
-    model_name = "gemini-flash-latest"
+    model_name = "gemini-2.0-flash"
 
     config = types.GenerateContentConfig()
     if response_schema:
@@ -132,7 +132,7 @@ async def count_agent_model_call(callback_context, llm_request) -> None:
 def get_deep_legal_loop_agent() -> Agent:
     return Agent(
         name="DeepLegalLoopAgent",
-        model="gemini-flash-latest",
+        model="gemini-2.0-flash",
         instruction="""
 You are an expert real-estate zoning researcher. Your goal is to research short-term rental (STR) legality and regulations for a specific municipality.
 Use the tools serper_search and fetch_page to find and read municipal codes, zoning codes, and local ordinances.
