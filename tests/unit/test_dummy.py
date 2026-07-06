@@ -47,18 +47,28 @@ def test_geocode_location_mock():
     assert res[0]["municipality"] == "Irvine"
     assert res[0]["state"] == "CA"
 
-    # Test default fallback
-    res_default = geocode_location("Unknown Location")
+    import app.integrations
+    app.integrations.USE_MOCK_APIS = True
+
+    # Test exception on unknown location
+    res_default = geocode_location("Unknown Location 123")
     assert len(res_default) == 1
     assert res_default[0]["municipality"] == "Gatlinburg"
 
 def test_query_mashvisor_mock():
     init_api_counts()
 
+    import app.integrations
+    app.integrations.USE_MOCK_APIS = True
+
     res = query_mashvisor_api("Gatlinburg", "TN")
     assert res["sample_size"] == 142
     assert res["median_property_price"] == 450000
     assert res["average_daily_rate_adr"] == 285
+
+    res_default = query_mashvisor_api("Unknown City", "XX")
+    assert res_default["sample_size"] == 142
+    assert res_default["average_daily_rate_adr"] == 285
 
 def test_serper_search_mock():
     init_api_counts()

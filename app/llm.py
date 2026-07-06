@@ -160,37 +160,7 @@ Analyze the following user real estate query and extract:
 
 Query: "{prompt_text}"
 """
-    try:
-        return call_gemini_flash(prompt, response_schema=IngestedInputs)
-    except Exception:
-        # Robust fallback parsing
-        locations = []
-        home_types = []
-        text_lower = prompt_text.lower()
-
-        # Check locations
-        for loc in ["new york", "irvine", "los angeles", "la", "denver", "san diego",
-                    "steamboat", "austin", "new orleans", "honolulu", "las vegas", "clark county",
-                    "gatlinburg", "broken bow", "poconos", "new hampshire"]:
-            if loc in text_lower:
-                locations.append(loc.title())
-        if not locations:
-            locations = ["New Hampshire", "Poconos"]
-
-        # Check home types
-        for ht in ["cabin", "tiny home", "yurt", "rv", "house", "condo"]:
-            if ht in text_lower:
-                home_types.append(ht.title())
-        if not home_types:
-            home_types = ["Cabin", "Tiny Home"]
-
-        strategy = "Build from scratch" if any(s in text_lower for s in ["build", "scratch", "construction"]) else "Buy existing"
-
-        return IngestedInputs(
-            target_locations=locations,
-            desired_home_types=home_types,
-            execution_strategy=strategy
-        )
+    return call_gemini_flash(prompt, response_schema=IngestedInputs)
 
 
 # Step 2: Macro Legal Screen
@@ -218,17 +188,7 @@ Search snippets:
 
 Provide the response matching the schema.
 """
-    try:
-        return call_gemini_flash(prompt, response_schema=MacroScreenResult)
-    except Exception:
-        # Fallback based on known baseline classifications
-        m_lower = municipality.lower()
-        if "new york" in m_lower or "nyc" in m_lower or "irvine" in m_lower:
-            return MacroScreenResult(status="BANNED", restriction_reason="STRs are prohibited/banned by local law.")
-        elif any(c in m_lower for c in ["los angeles", "denver", "san diego", "steamboat", "austin", "new orleans", "honolulu", "las vegas"]):
-            return MacroScreenResult(status="RESTRICTED", restriction_reason="Strict municipal rules or owner-occupancy requirements apply.")
-        else:
-            return MacroScreenResult(status="ALLOWED", restriction_reason="Generally allowed with standard permits.")
+    return call_gemini_flash(prompt, response_schema=MacroScreenResult)
 
 
 # Step 3: Extract structured legal status from research history
@@ -241,20 +201,7 @@ Evaluate if unique stays / temporary structures (e.g. Yurts, RVs) are prohibited
 Zoning research summary:
 {research_summary}
 """
-    try:
-        return call_gemini_pro(prompt, response_schema=LegalStatus)
-    except Exception:
-        # Fallback values
-        return LegalStatus(
-            status="ALLOWED" if "gatlinburg" in municipality.lower() or "broken bow" in municipality.lower() else "RESTRICTED",
-            restriction_reason="Standard zoning applies.",
-            eligible_zones_summary="Residential and commercial zones.",
-            primary_residence_required=False,
-            minimum_stay_days=1,
-            permit_cap_exists=False,
-            regulatory_trajectory_risk="Low risk.",
-            summary_of_restrictions="Favorable rules."
-        )
+    return call_gemini_pro(prompt, response_schema=LegalStatus)
 
 
 # Step 5: Synthesis
@@ -269,13 +216,7 @@ Also, generate a list of 2-4 major tourist demand drivers for {municipality}, {s
 
 Provide the output matching the schema.
 """
-    try:
-        return call_gemini_flash(prompt, response_schema=ReportSynthesis)
-    except Exception:
-        return ReportSynthesis(
-            qualitative_synthesis=f"{municipality} is a solid market with good returns.",
-            demand_drivers=["Local tourism", "Outdoor activities"]
-        )
+    return call_gemini_flash(prompt, response_schema=ReportSynthesis)
 
 def json_dumps_clean(obj):
     import json
