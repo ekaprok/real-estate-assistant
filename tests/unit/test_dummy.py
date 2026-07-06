@@ -47,49 +47,79 @@ def test_geocode_location_mock():
     assert res[0]["municipality"] == "Irvine"
     assert res[0]["state"] == "CA"
 
-    import app.integrations
-    app.integrations.USE_MOCK_APIS = True
+    import os
+    orig = os.environ.get("USE_MOCK_APIS")
+    os.environ["USE_MOCK_APIS"] = "True"
 
-    # Test exception on unknown location
-    res_default = geocode_location("Unknown Location 123")
+    try:
+        # Test exception on unknown location
+        res_default = geocode_location("Unknown Location 123")
+    except ValueError:
+        pass
+    finally:
+        if orig is None:
+            del os.environ["USE_MOCK_APIS"]
+        else:
+            os.environ["USE_MOCK_APIS"] = orig
     assert len(res_default) == 1
     assert res_default[0]["municipality"] == "Gatlinburg"
 
 def test_query_mashvisor_mock():
     init_api_counts()
 
-    import app.integrations
-    app.integrations.USE_MOCK_APIS = True
+    import os
+    orig = os.environ.get("USE_MOCK_APIS")
+    os.environ["USE_MOCK_APIS"] = "True"
 
-    res = query_mashvisor_api("Gatlinburg", "TN")
-    assert res["sample_size"] == 142
-    assert res["median_property_price"] == 450000
-    assert res["average_daily_rate_adr"] == 285
+    try:
+        res = query_mashvisor_api("Gatlinburg", "TN")
+        assert res["sample_size"] == 142
+        assert res["median_property_price"] == 450000
+        assert res["average_daily_rate_adr"] == 285
 
-    res_default = query_mashvisor_api("Unknown City", "XX")
-    assert res_default["sample_size"] == 142
+        res_default = query_mashvisor_api("Unknown City", "XX")
+        assert res_default["sample_size"] == 142
+    finally:
+        if orig is None:
+            del os.environ["USE_MOCK_APIS"]
+        else:
+            os.environ["USE_MOCK_APIS"] = orig
     assert res_default["average_daily_rate_adr"] == 285
 
 def test_serper_search_mock():
     init_api_counts()
 
-    import app.tools
-    app.tools.USE_MOCK_APIS = True
+    import os
+    orig = os.environ.get("USE_MOCK_APIS")
+    os.environ["USE_MOCK_APIS"] = "True"
 
-    res = serper_search("New York City short term rental ban")
-    assert "organic" in res
+    try:
+        res = serper_search("New York City short term rental ban")
+        assert "organic" in res
+    finally:
+        if orig is None:
+            del os.environ["USE_MOCK_APIS"]
+        else:
+            os.environ["USE_MOCK_APIS"] = orig
     assert len(res["organic"]) > 0
     assert "Local Law 18" in res["organic"][0]["snippet"]
 
 def test_fetch_page_mock():
     init_api_counts()
 
-    import app.tools
-    app.tools.USE_MOCK_APIS = True
+    import os
+    orig = os.environ.get("USE_MOCK_APIS")
+    os.environ["USE_MOCK_APIS"] = "True"
 
-    res = fetch_page("https://www.nyc.gov/site/specialenforcement/registration-law/registration-law-for-hosts.page")
-    assert "url" in res
-    assert "Local Law 18" in res["text"]
+    try:
+        res = fetch_page("https://www.nyc.gov/site/specialenforcement/registration-law/registration-law-for-hosts.page")
+        assert "url" in res
+        assert "Local Law 18" in res["text"]
+    finally:
+        if orig is None:
+            del os.environ["USE_MOCK_APIS"]
+        else:
+            os.environ["USE_MOCK_APIS"] = orig
 
 def test_filter_str_relevant_text():
     from app.tools import filter_str_relevant_text

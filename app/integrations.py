@@ -10,8 +10,7 @@ logger = logging.getLogger(__name__)
 # Run DB initialization at import time
 init_cache_db()
 
-# Environment flag for forcing mocks in tests
-USE_MOCK_APIS = os.environ.get("USE_MOCK_APIS", "False").lower() == "true"
+from app.mock_handlers import _use_mock_apis
 
 # Lazy/conditional import of mocks to isolate test code from production logic
 try:
@@ -35,7 +34,7 @@ def geocode_location(location_query: str) -> list[dict]:
 
     maps_key = os.environ.get("GOOGLE_MAPS_API_KEY_DEV")
 
-    if USE_MOCK_APIS:
+    if _use_mock_apis():
         logger.info(f"Using mock geocoding for {location_query}.")
         query_lower = location_query.lower()
         results = None
@@ -93,7 +92,7 @@ def resolve_municipalities_overpass(lat: float, lng: float) -> list[dict]:
     """Queries Overpass API or returns mock results based on mock coordinates."""
     increment_api_count("overpass_api")
 
-    if USE_MOCK_APIS:
+    if _use_mock_apis():
         return []
 
     headers = {"User-Agent": "RealEstateAssistant/1.0 (local-dev)"}
@@ -128,7 +127,7 @@ def query_mashvisor_api(municipality: str, state: str) -> dict:
 
     mashvisor_key = os.environ.get("MASHVISOR_API_KEY_DEV")
 
-    if USE_MOCK_APIS:
+    if _use_mock_apis():
         logger.info(f"Using mock Mashvisor data for {municipality}, {state}.")
         result = MOCK_MASHVISOR_DB.get(municipality)
         if result is None:

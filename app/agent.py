@@ -85,8 +85,9 @@ class StrReportAgent(BaseAgent):
             return
 
         # Execute the deterministic 5-step analysis funnel
+        import asyncio
         from app.pipeline import run_pipeline
-        report_yaml = run_pipeline(user_prompt)
+        report_yaml = await asyncio.to_thread(run_pipeline, user_prompt)
 
         from google.genai import types as genai_types
         yield Event(

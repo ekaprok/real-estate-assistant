@@ -2,7 +2,8 @@ import os
 import requests
 import logging
 
-USE_MOCK_APIS = os.environ.get("USE_MOCK_APIS", "False").lower() == "true"
+from app.mock_handlers import _use_mock_apis
+
 from bs4 import BeautifulSoup
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -124,7 +125,7 @@ def serper_search(query: str) -> dict:
 
     serper_key = os.environ.get("SERPER_API_KEY") or os.environ.get("SERPER_API_KEY_DEV")
 
-    if USE_MOCK_APIS:
+    if _use_mock_apis():
         logger.info("Using mock search results.")
         query_lower = query.lower()
         results = None
@@ -147,7 +148,7 @@ def serper_search(query: str) -> dict:
         return _execute_serper_request(url, headers, query)
     except Exception as e:
         logger.error(f"Serper API call failed after retries: {e}")
-        if USE_MOCK_APIS:
+        if _use_mock_apis():
             query_lower = query.lower()
             for key, val in MOCK_SEARCH_RESULTS.items():
                 if key in query_lower:
@@ -167,7 +168,7 @@ def fetch_page(url: str) -> dict:
     """
     increment_api_count("web_scraper_fetch_page")
 
-    if USE_MOCK_APIS:
+    if _use_mock_apis():
         # Check mock pages first
         if url in MOCK_PAGES:
             return {"url": url, "text": MOCK_PAGES[url]}
@@ -197,7 +198,7 @@ def fetch_page(url: str) -> dict:
         logger.error(f"Web scraper call failed after retries for URL {url}: {e}.")
         fallback_text = "Error: Page could not be accessed. The site may block scrapers or is down. Please try a different search or source."
 
-        if USE_MOCK_APIS:
+        if _use_mock_apis():
             logger.error(f"Falling back to mock.")
             for m_url, m_text in MOCK_PAGES.items():
                 if m_url in url or url in m_url:
