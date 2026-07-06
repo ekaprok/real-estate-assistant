@@ -2,6 +2,7 @@ metrics_to_run:
   - custom_response_quality
   - step_2_classification
   - micro_trajectory_adherence
+  - dynamic_followup_adherence
 
 custom_metrics:
   - name: custom_response_quality
@@ -86,3 +87,31 @@ custom_metrics:
       def evaluate(instance):
           turns = (instance.get("agent_data") or {}).get("turns", [])
           return {'score': len(turns)}
+
+  - name: dynamic_followup_adherence
+    prompt_template: |
+      You are an expert evaluator grading the agent's dynamic research loop performance.
+
+      Your goal is to determine if the agent correctly realizes when it is missing crucial specific niche information (like unique stays rules) and proactively issues follow-up queries to discover it.
+
+      Review the 'agent_data' trace and evaluate based on these criteria:
+      1. Did the agent start by issuing generic queries without niche keywords (e.g., just searching for "short term rentals [city]" without mentioning yurts/RVs)?
+      2. Did the agent's evaluator correctly reject the initial research as incomplete if it was missing required information (such as unique stays)?
+      3. Did the agent then dynamically issue targeted follow-up queries (e.g., searching specifically for "unique stays", "yurts", "RVs", or "temporary structures")?
+
+      Score out of 5:
+      1 (Poor): The agent never attempted to search for missing niche info, or incorrectly approved an incomplete report that lacked unique stays details.
+      2 (Below Average): The agent identified missing info but its follow-up queries were too broad or completely ineffective.
+      3 (Acceptable): The agent realized information was missing and attempted follow-up queries, but they were not well-targeted for the specific missing info (e.g., unique stays).
+      4 (Good): The agent correctly issued a targeted follow-up query for the missing information, but perhaps slightly deviated in its reasoning.
+      5 (Excellent): The agent perfectly executed the dynamic loop: it ran a broad query, accurately identified what was missing (e.g. unique stays), and explicitly ran targeted follow-up queries using niche keywords.
+
+      ### Target Evaluation:
+      User Prompt: {prompt}
+      Full Agent Trace: {agent_data}
+
+      Return your evaluation as a valid JSON object matching this structure:
+      {
+        "score": <integer between 1 and 5>,
+        "explanation": "<detailed string explaining the rationale for the score assigned>"
+      }

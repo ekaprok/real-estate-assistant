@@ -4,31 +4,23 @@
       "eval_case_id": "str_banned_nyc",
       "prompt": {
         "role": "user",
-        "parts": [{"text": "Can I operate a short-term rental in New York City, NY?"}]
+        "parts": [
+          {
+            "text": "Can I operate a short-term rental in New York City, NY?"
+          }
+        ]
       },
       "reference": "Step 2 Macro: BANNED. Step 3 Specific: Local Law 18 fully prohibits unhosted rentals for less than 30 days."
-    },
-    {
-      "eval_case_id": "str_banned_irvine",
-      "prompt": {
-        "role": "user",
-        "parts": [{"text": "Is it legal to do Airbnb in Irvine, CA?"}]
-      },
-      "reference": "Step 2 Macro: BANNED. Step 3 Specific: Absolute prohibition of short-term rentals in all residential zones."
     },
     {
       "eval_case_id": "str_primary_res_la",
       "prompt": {
         "role": "user",
-        "parts": [{"text": "I want to buy an investment property for Airbnb in Los Angeles, CA. Can I do that?"}]
-      },
-      "reference": "Step 2 Macro: RESTRICTED. Step 3 Specific: Permitted only in the host's primary residence."
-    },
-    {
-      "eval_case_id": "str_primary_res_denver",
-      "prompt": {
-        "role": "user",
-        "parts": [{"text": "What are the rules for short-term rentals in Denver, CO?"}]
+        "parts": [
+          {
+            "text": "I want to buy an investment property for Airbnb in Los Angeles, CA. Can I do that?"
+          }
+        ]
       },
       "reference": "Step 2 Macro: RESTRICTED. Step 3 Specific: Permitted only in the host's primary residence."
     },
@@ -36,39 +28,35 @@
       "eval_case_id": "str_caps_san_diego",
       "prompt": {
         "role": "user",
-        "parts": [{"text": "Can I get an Airbnb permit in San Diego, CA?"}]
+        "parts": [
+          {
+            "text": "Can I get an Airbnb permit in San Diego, CA?"
+          }
+        ]
       },
       "reference": "Step 2 Macro: RESTRICTED. Step 3 Specific: Tier system with permit caps and a lottery process."
-    },
-    {
-      "eval_case_id": "str_caps_steamboat",
-      "prompt": {
-        "role": "user",
-        "parts": [{"text": "How do STR permits work in Steamboat Springs, CO?"}]
-      },
-      "reference": "Step 2 Macro: RESTRICTED. Step 3 Specific: Managed by an Overlay Zone (Green=Unlimited, Yellow=Capped/Lottery, Red=Prohibited)."
     },
     {
       "eval_case_id": "str_zoning_austin",
       "prompt": {
         "role": "user",
-        "parts": [{"text": "Can I operate a Type 2 short term rental in Austin, TX?"}]
+        "parts": [
+          {
+            "text": "Can I operate a Type 2 short term rental in Austin, TX?"
+          }
+        ]
       },
       "reference": "Step 2 Macro: RESTRICTED. Step 3 Specific: Type 2 (non-owner occupied) STRs are strictly limited by zoning overlays or banned in certain residential zones."
-    },
-    {
-      "eval_case_id": "str_zoning_new_orleans",
-      "prompt": {
-        "role": "user",
-        "parts": [{"text": "What are the STR regulations in New Orleans, LA residential zones?"}]
-      },
-      "reference": "Step 2 Macro: RESTRICTED/BANNED. Step 3 Specific: NSTR (Residential) permits require owner-occupancy (homestead exemption) and face block density caps. CSTR (Commercial) requires conditional use."
     },
     {
       "eval_case_id": "str_min_stay_honolulu",
       "prompt": {
         "role": "user",
-        "parts": [{"text": "Can I rent out my house for a week in Honolulu, HI?"}]
+        "parts": [
+          {
+            "text": "Can I rent out my house for a week in Honolulu, HI?"
+          }
+        ]
       },
       "reference": "Step 2 Macro: RESTRICTED. Step 3 Specific: A 90-day minimum stay is required for most residential areas (Ordinance 25-02), with exceptions for grandfathered NUCs or designated resort zones."
     },
@@ -76,7 +64,11 @@
       "eval_case_id": "str_unique_structures",
       "prompt": {
         "role": "user",
-        "parts": [{"text": "Can I run an Airbnb out of a Yurt or RV on my property?"}]
+        "parts": [
+          {
+            "text": "Can I run an Airbnb out of a Yurt or RV on my property?"
+          }
+        ]
       },
       "reference": "Step 2 Macro: RESTRICTED. Step 3 Specific: Temporary structures like Yurts or RVs are generally prohibited for STR use even if STRs are allowed."
     },
@@ -84,7 +76,11 @@
       "eval_case_id": "str_nuance_las_vegas",
       "prompt": {
         "role": "user",
-        "parts": [{"text": "What's the difference in Airbnb laws between Las Vegas city limits and unincorporated Clark County?"}]
+        "parts": [
+          {
+            "text": "What's the difference in Airbnb laws between Las Vegas city limits and unincorporated Clark County?"
+          }
+        ]
       },
       "reference": "Step 2 Macro: RESTRICTED. Step 3 Specific: City limits require owner-occupancy. Unincorporated Clark County has strict distance caps (e.g. 1000 ft from another STR) and lottery moratoriums."
     },
@@ -92,17 +88,13 @@
       "eval_case_id": "str_friendly_gatlinburg",
       "prompt": {
         "role": "user",
-        "parts": [{"text": "I'm looking to invest in Gatlinburg, TN for Airbnb. Are they friendly to STRs?"}]
+        "parts": [
+          {
+            "text": "I'm looking to invest in Gatlinburg, TN for Airbnb. Are they friendly to STRs?"
+          }
+        ]
       },
       "reference": "Step 2 Macro: ALLOWED. Step 3 Specific: Generally STR-friendly with standard permitting and taxation processes."
-    },
-    {
-      "eval_case_id": "str_friendly_broken_bow",
-      "prompt": {
-        "role": "user",
-        "parts": [{"text": "Is Broken Bow, OK a good place for short-term rentals legally?"}]
-      },
-      "reference": "Step 2 Macro: ALLOWED. Step 3 Specific: Generally STR-friendly with straightforward compliance requirements."
     }
   ]
 }

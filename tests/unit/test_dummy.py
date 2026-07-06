@@ -31,7 +31,7 @@ def test_api_limits_enforcement():
     init_api_counts()
 
     # Intentionally trigger limit violation for overpass_api
-    # Limit is 20 in api_limits_config.yaml
+    # Limit is 5 in app/api_limits.py
     with pytest.raises(ApiLimitExceededError) as exc_info:
         for _ in range(25):
             increment_api_count("overpass_api")
@@ -73,6 +73,9 @@ def test_query_mashvisor_mock():
 def test_serper_search_mock():
     init_api_counts()
 
+    import app.tools
+    app.tools.USE_MOCK_APIS = True
+
     res = serper_search("New York City short term rental ban")
     assert "organic" in res
     assert len(res["organic"]) > 0
@@ -80,6 +83,9 @@ def test_serper_search_mock():
 
 def test_fetch_page_mock():
     init_api_counts()
+
+    import app.tools
+    app.tools.USE_MOCK_APIS = True
 
     res = fetch_page("https://www.nyc.gov/site/specialenforcement/registration-law/registration-law-for-hosts.page")
     assert "url" in res

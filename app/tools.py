@@ -73,19 +73,17 @@ def serper_search(query: str) -> dict:
     serper_key = os.environ.get("SERPER_API_KEY") or os.environ.get("SERPER_API_KEY_DEV")
 
     if USE_MOCK_APIS:
-        # Fallback if no real key or mock forced
-        if not serper_key or "your_" in serper_key or "placeholder" in serper_key:
-            logger.info("Serper key missing or placeholder. Falling back to mock search results.")
-            query_lower = query.lower()
-            results = None
-            for key, val in MOCK_SEARCH_RESULTS.items():
-                if key in query_lower:
-                    results = val
-                    break
-            if results is None:
-                results = MOCK_SEARCH_RESULTS.get("gatlinburg", {})
+        logger.info("Using mock search results.")
+        query_lower = query.lower()
+        results = None
+        for key, val in MOCK_SEARCH_RESULTS.items():
+            if key in query_lower:
+                results = val
+                break
+        if results is None:
+            results = MOCK_SEARCH_RESULTS.get("gatlinburg", {})
 
-            return results
+        return results
 
     if not serper_key or "your_" in serper_key or "placeholder" in serper_key:
         raise ValueError("Serper API key is missing or is a placeholder, but USE_MOCK_APIS is False.")
@@ -146,7 +144,7 @@ def fetch_page(url: str) -> dict:
     except Exception as e:
         logger.error(f"Web scraper call failed after retries for URL {url}: {e}. Falling back to mock.")
         # Fallback if scraping fails
-        fallback_text = "This page could not be accessed. Standard STR rules apply."
+        fallback_text = "Error: Page could not be accessed. The site may block scrapers or is down. Please try a different search or source."
         for m_url, m_text in MOCK_PAGES.items():
             if m_url in url or url in m_url:
                 fallback_text = m_text

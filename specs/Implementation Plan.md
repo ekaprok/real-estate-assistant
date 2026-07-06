@@ -2,14 +2,14 @@
 
 ## Phase 1: Establish the Evaluation Baseline (EDD)
 *   **Update `tests/eval/datasets/basic-dataset.json`**: Ensure comprehensive coverage of real-world STR zoning scenarios to rigorously test the `DeepLegalLoopAgent`:
-    *   **Fully Banned**: New York City, NY (Local Law 18); Irvine, CA (absolute prohibition).
-    *   **Primary Residence Only**: Los Angeles, CA; Denver, CO (host must live on-site).
-    *   **Permit Caps & Lotteries**: San Diego, CA (Tier system & caps); Steamboat Springs, CO.
-    *   **Zoning Overlays & Commercial-Only**: Austin, TX; New Orleans, LA (strict residential restrictions).
+    *   **Fully Banned**: New York City, NY (Local Law 18).
+    *   **Primary Residence Only**: Los Angeles, CA.
+    *   **Permit Caps & Lotteries**: San Diego, CA (Tier system & caps).
+    *   **Zoning Overlays & Commercial-Only**: Austin, TX.
     *   **Minimum-Stay Requirements**: Honolulu, HI (30-day/90-day minimums depending on zone).
     *   **Unique Structure Restrictions**: Jurisdictions that allow STRs but explicitly ban "temporary structures" (e.g., Yurts, RVs, Tiny Homes on wheels).
     *   **Jurisdictional Nuance (City vs. Unincorporated County)**: Las Vegas city limits vs. unincorporated Clark County.
-    *   **STR-Friendly (Control Cases)**: Gatlinburg, TN; Broken Bow, OK.
+    *   **STR-Friendly (Control Cases)**: Gatlinburg, TN.
 *   **Update `tests/eval/eval_config.yaml`**:
     *   Create `custom_response_quality` to enforce the output format perfectly matches `specs/final_report_template.yaml`.
     *   Create a custom metric for Step 2 to ensure accurate classification (Banned vs. Allowed/Restricted) from search snippets, minimizing false positives that would drop viable markets.
@@ -42,7 +42,7 @@ graph TD
 
 *   **Implement Step 3 (Deep Legal Verification)**: Build the `LoopAgent` inside `app/llm.py` that repeatedly queries `serper_search` and scrapes pages to fill out the `LegalStatus` JSON schema.
 *   **Orchestration**: Wire Steps 1-5 together inside `run_pipeline` (`app/pipeline.py`) so `StrReportAgent` simply triggers the funnel and returns the report.
-*   **API Cost Controls**: Implement a call counter in `app/pipeline.py` that enforces the maximum limits defined in `specs/api_limits_config.yaml`. The pipeline must abort immediately if any limit is reached to prevent runaway costs.
+*   **API Cost Controls**: Implement a call counter in `app/pipeline.py` that enforces the maximum limits defined in `app/api_limits.py`. The pipeline must abort immediately if any limit is reached to prevent runaway costs. All LLM calls (both single-shot and LoopAgent) use `gemini-3.5-flash` to optimize for resourcefulness.
 
 ## Architecture & Logic Breakdown
 

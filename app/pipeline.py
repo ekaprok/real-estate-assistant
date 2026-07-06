@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types as genai_types
-from app.api_limits import init_api_counts, get_current_counts, ApiLimitExceededError
+from app.api_limits import init_api_counts, get_current_counts, ApiLimitExceededError, API_LIMITS
 from app.integrations import geocode_location, query_mashvisor_api
 from app.llm import (
     parse_user_prompt,
@@ -25,10 +25,13 @@ from app.app_utils.finance import (
     calculate_composite_score
 )
 
-def run_agent_sync(agent, prompt: str) -> str:
-    """Helper to run the DeepLegalLoopAgent ReAct loop synchronously via Runner."""
+from app.app_utils.cache import with_cache, get_cached_response, set_cached_response
+
+@with_cache("agent_run")
+async def run_agent(agent, prompt: str) -> str:
+    """Helper to run the DeepLegalLoopAgent ReAct loop asynchronously via Runner."""
     session_service = InMemorySessionService()
-    session = session_service._create_session_impl(user_id="pipeline_user", app_name="pipeline")
+    session = await session_service.create_session(user_id="pipeline_user", app_name="pipeline")
     runner = Runner(agent=agent, session_service=session_service, app_name="pipeline")
 
     new_message = genai_types.Content(
@@ -36,19 +39,39 @@ def run_agent_sync(agent, prompt: str) -> str:
         parts=[genai_types.Part.from_text(text=prompt)]
     )
 
-    events = list(runner.run(
+    events = []
+    async for event in runner.run_async(
         new_message=new_message,
         user_id="pipeline_user",
         session_id=session.id,
-    ))
+    ):
+        events.append(event)
 
     response_text = ""
     for event in events:
+        if event.error_code:
+            if event.error_code == "ApiLimitExceededError":
+                # Find current count if possible or use limit from config
+                limit = API_LIMITS.get("llm_gemini_flash_loop", 10)
+                raise ApiLimitExceededError("llm_gemini_flash_loop", limit)
+            raise RuntimeError(f"Agent execution failed: {event.error_message} ({event.error_code})")
         if event.content and event.content.parts:
             for part in event.content.parts:
                 if part.text:
                     response_text += part.text
+
+    final_summary = session.state.get("final_research_summary")
+    if final_summary:
+        return str(final_summary)
+
     return response_text
+
+
+def generate_research_prompt(municipality: str, state: str, county: str) -> str:
+    return (
+        f"Research the zoning laws and short term rental (STR) regulations for "
+        f"{municipality}, {state} (County: {county})."
+    )
 
 
 def run_pipeline(user_prompt: str) -> str:
@@ -63,7 +86,8 @@ def run_pipeline(user_prompt: str) -> str:
     try:
         # Step 1: Ingestion & Parse prompt
         inputs = parse_user_prompt(user_prompt)
-        logger.info(f"Step 1: Parsed inputs -> locations: {inputs.target_locations}, home_types: {inputs.desired_home_types}, strategy: {inputs.execution_strategy}")
+
+        logger.info(f"Step 1: Parsed inputs -> locations: {inputs.target_locations}")
 
         # Step 1.5: Geographic Resolution
         resolved_municipalities = []
@@ -77,6 +101,28 @@ def run_pipeline(user_prompt: str) -> str:
                     seen_keys.add(key)
                     resolved_municipalities.append(res)
         logger.info(f"Resolved municipalities to process: {resolved_municipalities}")
+
+        # Check Final Report Cache based on resolved parameters
+        # Sort municipalities to guarantee consistent order
+        muni_keys = sorted([(m["municipality"].lower(), m["state"].lower()) for m in resolved_municipalities])
+        canonical_key_data = {
+            "municipalities": muni_keys,
+        }
+        import json
+        import hashlib
+        key_str = json.dumps(canonical_key_data, sort_keys=True)
+        args_hash = hashlib.md5(key_str.encode("utf-8")).hexdigest()
+
+        use_mock = os.environ.get("USE_MOCK_APIS", "False").lower() == "true"
+        cache_key = f"mock_report_{args_hash}" if use_mock else f"report_{args_hash}"
+
+        cached = get_cached_response(cache_key)
+        if cached is not None:
+            logger.info(f"Cache hit for report key {cache_key}")
+            logger.info(f"Final Report:\n{cached}")
+            return cached
+
+        logger.info(f"Cache miss for report key {cache_key}")
 
         # Step 2: Macro Legal Screen & Step 3: Deep Legal Loop
         surviving_municipalities = []
@@ -106,15 +152,12 @@ def run_pipeline(user_prompt: str) -> str:
                 continue
 
             # Step 3: Deep Legal Verification (LoopAgent ReAct)
-            research_prompt = (
-                f"Research the zoning laws and short term rental (STR) regulations for "
-                f"{name}, {state} (County: {county}) considering the desired home types: {inputs.desired_home_types}."
-            )
+            research_prompt = generate_research_prompt(name, state, county)
             logger.info(f"Step 3: Executing Deep Legal verification loop for {name}, {state}...")
-            research_summary = run_agent_sync(deep_research_agent, research_prompt)
+            research_summary = run_agent(deep_research_agent, research_prompt)
 
             # Extract structured LegalStatus
-            legal_status = extract_legal_status(name, state, inputs.desired_home_types, research_summary)
+            legal_status = extract_legal_status(name, state, research_summary)
             logger.info(f"Deep Legal verification status for {name}, {state}: {legal_status.status}")
 
             if legal_status.status == "BANNED":
@@ -135,7 +178,7 @@ def run_pipeline(user_prompt: str) -> str:
             })
 
         # Step 4: ROI Ranking & Optimal Configuration (Mashvisor)
-        recommended_municipalities = []
+        survived_municipalities = []
         for index, item in enumerate(surviving_municipalities):
             muni = item["muni"]
             name = muni["municipality"]
@@ -178,8 +221,8 @@ def run_pipeline(user_prompt: str) -> str:
             }
             synthesis_res = synthesize_report(name, state, calculated_data)
 
-            # Construct recommended muni item
-            recommended_municipalities.append({
+            # Construct survived muni item
+            survived_municipalities.append({
                 "location": {
                     "municipality": name,
                     "state": state,
@@ -244,10 +287,10 @@ def run_pipeline(user_prompt: str) -> str:
                 "qualitative_synthesis": synthesis_res.qualitative_synthesis
             })
 
-        # Sort recommendations by municipal_str_score descending
-        recommended_municipalities.sort(key=lambda x: x["municipal_str_score"], reverse=True)
+        # Sort survived municipalities by municipal_str_score descending
+        survived_municipalities.sort(key=lambda x: x["municipal_str_score"], reverse=True)
         # Assign rank based on sorted order
-        for idx, rec in enumerate(recommended_municipalities):
+        for idx, rec in enumerate(survived_municipalities):
             rec["rank"] = idx + 1
 
         # Build final report yaml
@@ -255,20 +298,25 @@ def run_pipeline(user_prompt: str) -> str:
             "report_metadata": {
                 "generated_at": datetime.utcnow().isoformat() + "Z",
                 "user_inputs": {
-                    "target_locations": inputs.target_locations,
-                    "desired_home_types": inputs.desired_home_types
+                    "target_locations": inputs.target_locations
                 },
                 "data_sources": {
                     "financial_data_source": "Mashvisor",
                     "legal_data_source": "Serper.dev web search + municipal / Municode / eCode360 / AmLegal scrape"
                 }
             },
-            "recommended_municipalities": recommended_municipalities,
+            "survived_municipalities": survived_municipalities,
             "banned_municipalities": banned_municipalities
         }
 
+        report_yaml = yaml.dump(report, default_flow_style=False, sort_keys=False)
+        logger.info(f"Final Report:\n{report_yaml}")
+
+        # Save to cache
+        set_cached_response(cache_key, report_yaml)
+
         logger.info(f"Pipeline completed successfully. API call counts: {get_current_counts()}")
-        return yaml.dump(report, default_flow_style=False, sort_keys=False)
+        return report_yaml
 
     except ApiLimitExceededError as e:
         logger.error(f"Pipeline aborted: API limit exceeded: {e}")
@@ -278,4 +326,6 @@ def run_pipeline(user_prompt: str) -> str:
             "details": str(e),
             "current_counts": get_current_counts()
         }
-        return yaml.dump(report, default_flow_style=False, sort_keys=False)
+        report_yaml = yaml.dump(report, default_flow_style=False, sort_keys=False)
+        logger.info(f"Final Report:\n{report_yaml}")
+        return report_yaml

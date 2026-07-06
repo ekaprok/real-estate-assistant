@@ -16,8 +16,8 @@ report_metadata:
     financial_data_source: "Mashvisor"
     legal_data_source: "Serper.dev web search + municipal / Municode / eCode360 / AmLegal scrape"
 
-# Ranked shortlist of top municipalities that survived legal, budget, and financial screening (typically 3–5)
-recommended_municipalities:
+# Ranked list of all municipalities that survived legal, budget, and financial screening, sorted by recommendation
+survived_municipalities:
   - rank: 1
 
     location:

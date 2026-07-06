@@ -31,9 +31,9 @@ The core financial and legal data must originate from the following primary sour
 3. **The Mashvisor API**
    - **Purpose:** Financial and market data (Average Daily Rate, Occupancy, Revenue, property prices).
    - **Cost:** Premium/expensive API. Calls are minimized by placing them after the macro legal screen.
-4. **LLMs (Gemini Flash & Gemini Pro)**
-   - **Purpose:** Gemini Flash is used for lightweight triage and report synthesis. Gemini Pro is used for deep legal evaluation of zoning codes.
-   - **Cost:** Gemini Flash costs fractions of a cent per query. Gemini Pro is more expensive but only used on the small subset of surviving municipalities.
+4. **LLMs (Gemini Flash)**
+   - **Purpose:** Gemini Flash is used uniformly across the pipeline for both lightweight triage and the deep ReAct agent loops for legal evaluation.
+   - **Cost:** Gemini Flash costs fractions of a cent per query, providing significant cost optimization (resourcefulness) while still robustly handling structured outputs and unstructured code parsing.
 
 ## High-Level Overview
 
@@ -49,7 +49,7 @@ The core financial and legal data must originate from the following primary sour
 To prevent runaway costs and protect against infinite agent loops, every API used in this pipeline is strictly constrained by a maximum number of calls per user request.
 - **Enforcement:** The pipeline must track the number of calls made to each API during a single execution.
 - **Failure Mode:** If any API hits its configured maximum limit, the request must immediately fail (abort execution) and return an error to the user.
-- **Configuration:** Limits are defined externally in `specs/api_limits_config.yaml`.
+- **Configuration:** Limits are maintained in `app/api_limits.py`.
 
 ## Steps Deep-Dive
 

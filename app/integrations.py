@@ -56,7 +56,7 @@ def geocode_location(location_query: str) -> list[dict]:
     try:
         url = "https://maps.googleapis.com/maps/api/geocode/json"
         params = {"address": location_query, "key": maps_key}
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.get(url, params=params, timeout=5)
         response.raise_for_status()
         data = response.json()
 

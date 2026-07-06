@@ -74,15 +74,15 @@ class StrReportAgent(BaseAgent):
             user_prompt = "".join(part.text for part in ctx.user_content.parts if part.text)
 
         if not user_prompt:
-            # Fallback to session events history
-            for event in reversed(ctx.session.events):
-                if event.author == "user" and event.content and event.content.parts:
-                    user_prompt = "".join(part.text for part in event.content.parts if part.text)
-                    if user_prompt:
-                        break
-
-        if not user_prompt:
-            user_prompt = "Can I operate a short term rental in Gatlinburg, TN?"
+            from google.genai import types as genai_types
+            yield Event(
+                author=self.name,
+                content=genai_types.Content(
+                    role="model",
+                    parts=[genai_types.Part.from_text(text="Please provide target locations to analyze short-term rental rules.")]
+                )
+            )
+            return
 
         # Execute the deterministic 5-step analysis funnel
         from app.pipeline import run_pipeline
