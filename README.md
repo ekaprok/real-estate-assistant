@@ -83,6 +83,14 @@ agents-cli playground
 
 Use the playground when you want to iterate on prompts, inspect agent behavior, or demo the assistant in a browser.
 
+## Logs
+
+To inspect agent run output and errors, view the Agents CLI server log:
+
+```bash
+cat .google-agents-cli/run_server.log
+```
+
 ## Project Structure
 
 - `app/`: Core agent code and pipeline logic.
