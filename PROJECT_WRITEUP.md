@@ -4,7 +4,7 @@ Short-Term Rental Market Intelligence Agent
 
 A hybrid system that tells Short-Term Rental (STR) investors where they can legally operate and where the money is—built to be highly cost-effective.
 
-**Video demo:** *[paste public link here]*
+**Video demo:** https://youtu.be/Qb2gSvQNuBU
 
 **Github link:** [https://github.com/ekaprok/real-estate-assistant](https://github.com/ekaprok/real-estate-assistant)
 
