@@ -207,3 +207,6 @@ tools/a2a-inspector/
 *.db
 *.sqlite
 *.sqlite3
+
+# Demo recordings
+demo.mp4

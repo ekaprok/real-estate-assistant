@@ -1,6 +1,6 @@
 # Short-Term Rental Market Intelligence Agent
 
-![Short-Term Rental Market Intelligence Agent](images/RealEstateLogo.png)
+Short-Term Rental Market Intelligence Agent
 
 A hybrid system that tells Short-Term Rental (STR) investors where they can legally operate and where the money is—built to be highly cost-effective.
 
@@ -28,48 +28,87 @@ Every claim includes a link to the web source.
 
 The main focus is **saving money**: we use cheaper AI models for simple tasks, filter text before sending it to the AI, use free or cheap data sources, and cache previous results. This makes the tool a powerful, affordable starting point for your research.
 
-**Example run** (`Union City, NJ`):
+**Example run** (`agents-cli run "Lincoln, NH"`):
 
 ```yaml
 report_metadata:
-  generated_at: '2026-07-07T02:51:15.088499Z'
+  generated_at: '2026-07-07T03:57:07.763658Z'
   user_inputs:
     target_locations:
-    - Union City, NJ
+    - Lincoln, NH
   data_sources:
     financial_data_source: Mashvisor
     legal_data_source:
       method: Serper.dev web search + municipal / Municode / eCode360 / AmLegal scrape
       source_urls:
-      - https://ecode360.com/31144893
+      - https://www.lincolnnh.gov/AgendaCenter/ViewFile/Item/55?fileID=229
+      - ...
 survived_municipalities:
 - location:
-    municipality: Union City
-    state: NJ
-    county: Hudson County
+    municipality: Lincoln
+    state: NH
+    county: Grafton County
   legal_and_compliance:
-    status: RESTRICTED
-    restriction_reason: Short-term rentals under 30 consecutive days are generally
-      prohibited in Union City.
+    status: ALLOWED
+    restriction_reason: Short-term rentals are permitted but require mandatory town
+      registration, a $100 fee, and a state Meals and Rooms License.
     eligible_zones_summary: Unknown
     primary_residence_required: false
-    minimum_stay_days: 30
+    minimum_stay_days: -1
     permit_cap_exists: false
-    permits: []
-    special_taxes: []
-    regulatory_trajectory_risk: The city is actively cracking down on illegal short-term
-      rentals and strengthening penalties for rental ordinance violations.
-    summary_of_restrictions: Short-term rentals of less than 30 consecutive days are
-      prohibited in Union City. Additionally, temporary structures such as RVs, tiny
-      homes, and yurts are not permitted as accessory or primary residential dwellings.
+    permits:
+    - name: Short-Term Rental Permit
+      process_summary: All short-term rental units must be registered with the Town
+        of Lincoln. The registration process requires a fee of $100 per tax parcel
+        and submission of state-level documentation, such as a state Meals and Rooms
+        License.
+      application_url: https://www.lincolnnh.gov/AgendaCenter/ViewFile/Minutes/_04272026-150
+    - name: New Hampshire Meals and Rooms License
+      process_summary: State-level license required to be provided during the town's
+        registration process.
+      application_url: https://www.lincolnnh.gov/sites/g/files/vyhlif4611/f/minutes/02_03_20_approved_bos_minutes_amended.pdf
+    special_taxes:
+    - name: New Hampshire Meals and Rooms Tax
+      rate: ''
+      description: State-mandated tax applicable to short-term rentals; specific rate
+        is not detailed in the summary.
+    regulatory_trajectory_risk: As of early 2026, the town was transitioning to a
+      new STR platform to manage registrations. Additionally, the town active monitors
+      STR impacts on local infrastructure such as water usage.
+    summary_of_restrictions: Short-term rentals must register with the town, pay a
+      $100 fee, and provide a state Meals and Rooms License. Non-traditional structures
+      like tiny homes on wheels or yurts may face restrictions based on classification
+      as personal property/RVs and require direct consultation with the Planning Department.
     source_urls:
-    - https://ecode360.com/31144893
+    - https://www.lincolnnh.gov/AgendaCenter/ViewFile/Item/55?fileID=229
+    - ...
   hoa_disclaimer: Resort and planned communities in this market commonly carry HOAs
     whose CC&Rs may restrict STRs. This system verifies only government zoning/law —
     confirm HOA rules independently before closing.
+  financial_metrics:
+    sample_size: 68
+    data_quality: medium
+    median_property_price: 477214
+    annual_occupancy_rate_percentage: 23
+    annual_revenue_estimate: 19896
+    annual_noi_estimate: -12408
+    average_cap_rate_percentage: -2.6
+    airbnb_properties_count: 301
+  demand_drivers:
+  - Proximity to Loon Mountain Resort for seasonal skiing and snowboarding
+  - Access to the White Mountain National Forest for hiking and outdoor recreation
+  - Tourism centered around the Kancamagus Highway and local scenic attractions
+  - Year-round visitor interest in regional festivals and mountain activities
+  qualitative_synthesis: Lincoln, NH permits short-term rentals, though operators
+    must comply with mandatory town registration, a $100 fee, and state licensing
+    requirements. Based on the provided financial data, the investment currently exhibits
+    a negative cap rate of -2.6%.
+  rank: 1
 banned_municipalities: []
 undetermined_municipalities: []
 ```
+
+For the full report schema and field definitions, see [`specs/final_report_template.yaml`](https://github.com/ekaprok/real-estate-assistant/blob/main/specs/final_report_template.yaml).
 
 ---
 
@@ -168,20 +207,21 @@ Official city websites have a lot of useless text. We clean it up first:
 
 The estimate below is for one city on a *fresh* run (no cache), assuming the research loop converges in 1–2 iterations (the common case). **The dominant cost is the agentic research loop**, for two reasons specific to modern Gemini models:
 
+
 | Component                | What runs                                                      | Typical usage (incl. reasoning tokens) | Approx. cost                                           |
-| ------------------------ | -------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------ |
-| Cheap model (Flash-Lite) | Prompt parse, quick screen, research executor, final synthesis | ~30–40K input + ~15K output tokens      | ~$0.015                                                |
-| Smart model (Flash)      | Research evaluator, structured legal extraction                | ~8K input + ~7K output tokens           | ~$0.030                                                |
-| Web search (Serper)      | Quick screen + deep-research queries                           | ~6–10 searches                          | ~$0.008                                                |
-| Geocoding (Google Maps)  | Resolve city → municipality                                    | 1 lookup                                | ~$0.005                                                |
-| Page scraping            | Fetch official ordinance pages                                 | ~3–5 fetches                            | ~$0 (self-hosted)                                      |
-| Financials (Mashvisor)   | Market/ROI data                                                | 1 lookup                                | subscription (optional; $0 with `SKIP_MASHVISOR=true`) |
-| **Total**                |                                                                |                                         | **~$0.05–$0.15 / city**                                |
+| ------------------------ | -------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------ |
+| Cheap model (Flash-Lite) | Prompt parse, quick screen, research executor, final synthesis | ~30–40K input + ~15K output tokens     | ~$0.015                                                |
+| Smart model (Flash)      | Research evaluator, structured legal extraction                | ~8K input + ~7K output tokens          | ~$0.030                                                |
+| Web search (Serper)      | Quick screen + deep-research queries                           | ~6–10 searches                         | ~$0.008                                                |
+| Geocoding (Google Maps)  | Resolve city → municipality                                    | 1 lookup                               | ~$0.005                                                |
+| Page scraping            | Fetch official ordinance pages                                 | ~3–5 fetches                           | ~$0 (self-hosted)                                      |
+| Financials (Mashvisor)   | Market/ROI data                                                | 1 lookup                               | subscription (optional; $0 with `SKIP_MASHVISOR=true`) |
+| **Total**                |                                                                |                                        | **~$0.05–$0.15 / city**                                |
+
 
 Without the optimizations this would be several times higher. The **hard per-run API limits** (up to ~25 loop model calls, 20 searches, and 10 fetches per city) act as a cost ceiling — a pathological, non-converging run (3 full iterations, heavy reasoning) tops out around **$0.30–$0.50/city** rather than spiraling.
 
 *(These are engineering estimates, not billed figures.
-
 
 ## Technologies Used
 
