@@ -86,15 +86,26 @@ class StrReportAgent(BaseAgent):
 
         # Execute the deterministic 5-step analysis funnel
         import asyncio
+        import yaml
         from app.pipeline import run_pipeline
         report_yaml = await asyncio.to_thread(run_pipeline, user_prompt)
 
         from google.genai import types as genai_types
+        response_text = report_yaml
+        try:
+            parsed = yaml.safe_load(report_yaml)
+            if isinstance(parsed, dict) and parsed.get("error") and parsed.get("message"):
+                response_text = (
+                    f"{parsed['message']}"
+                )
+        except yaml.YAMLError:
+            pass
+
         yield Event(
             author=self.name,
             content=genai_types.Content(
                 role="model",
-                parts=[genai_types.Part.from_text(text=report_yaml)]
+                parts=[genai_types.Part.from_text(text=response_text)]
             )
         )
 

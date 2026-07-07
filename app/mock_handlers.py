@@ -48,6 +48,20 @@ def mock_gemini_response(
 
     if response_schema is IngestedInputs:
         locations: list[str] = []
+        broad_region_tokens = (
+            "united states",
+            "whole country",
+            "entire country",
+            "bay area",
+            "socal",
+            "so cal",
+            "tri-state",
+            "pacific northwest",
+            "california",
+            "texas",
+            "florida",
+        )
+        is_broad_region = any(token in prompt_lower for token in broad_region_tokens)
         for token in ("jersey city", "gatlinburg", "new york", "new hampshire", "poconos", "union city"):
             if token in prompt_lower:
                 locations.append(token.title() if token != "new hampshire" else "New Hampshire")
@@ -56,7 +70,10 @@ def mock_gemini_response(
             locations = [query_part.strip()] if query_part.strip() else ["Gatlinburg"]
         if not locations:
             locations = ["Gatlinburg"]
-        return IngestedInputs(target_locations=locations)
+        return IngestedInputs(
+            target_locations=locations,
+            is_broad_region=is_broad_region,
+        )
 
     if response_schema is MacroScreenResult:
         if any(k in prompt_lower for k in ("new york", "irvine")):

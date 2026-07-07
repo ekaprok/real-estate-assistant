@@ -55,6 +55,8 @@ HOA_DISCLAIMER = (
     "— confirm HOA rules independently before closing."
 )
 
+MAX_MUNICIPALITIES = 5
+
 
 @with_cache("agent_run")
 async def run_agent(agent, prompt: str) -> str:
@@ -168,11 +170,15 @@ class GeoResolver:
         seen: set[tuple[str, str]] = set()
         logger.info("Step 1.5: Performing geographic resolution/geocoding...")
         for loc in target_locations:
-            for res in geocode_location(loc):
-                muni = ResolvedMunicipality.from_geocode(res)
-                if muni.cache_key not in seen:
-                    seen.add(muni.cache_key)
-                    resolved.append(muni)
+            try:
+                for res in geocode_location(loc):
+                    muni = ResolvedMunicipality.from_geocode(res)
+                    if muni.cache_key not in seen:
+                        seen.add(muni.cache_key)
+                        resolved.append(muni)
+            except ValueError as e:
+                logger.warning(f"Could not geocode location '{loc}': {e}")
+                raise ValueError(loc) from e
         logger.info(f"Resolved municipalities to process: {resolved}")
         return resolved
 
@@ -396,6 +402,40 @@ class ReportBuilder:
             }
         )
 
+    def too_broad_report(self) -> str:
+        return self._dump(
+            {
+                "error": "Scope too broad",
+                "message": (
+                    "The region you specified is too broad for a single analysis. "
+                    f"Please name up to {MAX_MUNICIPALITIES} specific cities or towns."
+                ),
+            }
+        )
+
+    def too_many_locations_report(self, count: int, limit: int) -> str:
+        return self._dump(
+            {
+                "error": "Too many locations",
+                "message": (
+                    f"You requested analysis for {count} municipalities, but this "
+                    f"system is limited to {limit} per request. Please narrow your "
+                    "list to your top priorities."
+                ),
+            }
+        )
+
+    def unresolved_location_report(self, location: str) -> str:
+        return self._dump(
+            {
+                "error": "Unresolved location",
+                "message": (
+                    f"Could not find a valid municipality for '{location}'. "
+                    "Please provide a specific city and state, such as 'Austin, TX'."
+                ),
+            }
+        )
+
     def api_limit_report(self, error: ApiLimitExceededError) -> str:
         report_yaml = self._dump(
             {
@@ -462,8 +502,27 @@ class Pipeline:
 
             logger.info(f"Step 1: Parsed inputs -> locations: {inputs.target_locations}")
 
+            if inputs.is_broad_region:
+                logger.warning(
+                    f"Broad region query rejected before geocoding: {user_prompt}"
+                )
+                return report_builder.too_broad_report()
+
             # Step 1.5: geographic resolution.
-            resolved = GeoResolver().resolve(inputs.target_locations)
+            try:
+                resolved = GeoResolver().resolve(inputs.target_locations)
+            except ValueError as e:
+                logger.warning(f"Unresolved location during geocoding: {e}")
+                return report_builder.unresolved_location_report(str(e))
+
+            if len(resolved) > MAX_MUNICIPALITIES:
+                logger.warning(
+                    f"Too many municipalities resolved ({len(resolved)} > {MAX_MUNICIPALITIES})"
+                )
+                return report_builder.too_many_locations_report(
+                    len(resolved), MAX_MUNICIPALITIES
+                )
+
             init_api_counts(len(resolved), reset=False)
 
             # Report-level cache lookup based on resolved parameters.
