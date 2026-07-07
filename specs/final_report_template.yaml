@@ -71,16 +71,26 @@ survived_municipalities:
 
     # Step 4 Output: Municipal Financial Metrics (Mashvisor city/investment endpoint).
     financial_metrics:
-      # Mashvisor investment comp pool size for this municipality — higher = more reliable medians
+      # Number of investment properties Mashvisor analyzed to compute the medians below (Mashvisor: investment_properties).
+      # Larger pool = more reliable medians; drives the data_quality bucket.
       sample_size: 142
-      data_quality: "high"  # high (≥80) | medium (≥30) | low (≥15) | very_low (<15)
+      data_quality: "high"  # Confidence in the medians, bucketed from sample_size: high (≥80) | medium (≥30) | low (≥15) | very_low (<15)
 
-      median_property_price: 450000                # Mashvisor: median_price
-      annual_occupancy_rate_percentage: 68         # Mashvisor: occupancy
-      annual_revenue_estimate: 70740               # Derived: monthly airbnb_rental × 12
-      annual_noi_estimate: 33300                   # Derived: (cap_rate / 100) × median_property_price
-      average_cap_rate_percentage: 7.4             # Mashvisor: airbnb_cap_rate — primary yield metric
-      airbnb_properties_count: 3450                # Mashvisor: airbnb_properties — STR comp / competition density
+      # Median list price (USD) of investment properties in the municipality (Mashvisor: median_price).
+      median_property_price: 450000
+      # Annual Airbnb occupancy: share of nights booked over a full year, 0–100% (Mashvisor: occupancy). Yes — per year.
+      annual_occupancy_rate_percentage: 68
+      # Estimated gross Airbnb rental income per year (USD). Derived: Mashvisor median monthly airbnb_rental × 12.
+      annual_revenue_estimate: 70740
+      # Estimated net operating income (NOI) per year (USD) = Total Revenue - Operating Expenses.
+      # Mashvisor returns no city-level expense breakdown, so this is derived from the cap rate:
+      # NOI = (average_cap_rate_percentage / 100) × median_property_price. Can be negative if the cap rate is negative.
+      annual_noi_estimate: 33300
+      # Capitalization rate (%): annual NOI ÷ property price — the annualized, financing-independent yield and primary
+      # ranking metric (Mashvisor: airbnb_cap_rate). Can be negative when a market's costs exceed its rental income.
+      average_cap_rate_percentage: 7.4
+      # Count of active Airbnb rental comps in the municipality — a competition/supply-density signal (Mashvisor: airbnb_properties).
+      airbnb_properties_count: 3450
 
     # Web-search demand context for the market
     demand_drivers: ["Great Smoky Mountains NP gateway", "Ober Mountain ski area", "Dollywood"]
