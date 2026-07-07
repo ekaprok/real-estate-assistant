@@ -49,99 +49,29 @@ MASHVISOR_API_KEY_DEV=your_mashvisor_api_key
 
 ### 5. Run the Agent
 
-Run the Real Estate Assistant through the Google Agents CLI. This goes through the ADK agent entry point (`app/agent.py`).
+Run the Real Estate Assistant from the project root with the Google Agents CLI. Pass the target municipality as the prompt:
 
-Set **Skip Mashvisor** and **Mock APIs** as environment variables when needed:
+```bash
+agents-cli run "Austin, TX"
+```
 
-<div id="command-builder">
-  <table>
-    <thead>
-      <tr>
-        <th>Input</th>
-        <th>Value</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><label for="cb-location">Location</label></td>
-        <td><input type="text" id="cb-location" value="Austin, TX" size="40" placeholder="Austin, TX"></td>
-        <td>Target municipality to analyze (required)</td>
-      </tr>
-      <tr>
-        <td><label for="cb-skip-mashvisor">Skip Mashvisor</label></td>
-        <td>
-          <select id="cb-skip-mashvisor">
-            <option value="false" selected>false</option>
-            <option value="true">true</option>
-          </select>
-        </td>
-        <td>Skip financial calculations; legal/compliance data only</td>
-      </tr>
-      <tr>
-        <td><label for="cb-mock-apis">Mock APIs</label></td>
-        <td>
-          <select id="cb-mock-apis">
-            <option value="false" selected>false</option>
-            <option value="true">true</option>
-          </select>
-        </td>
-        <td>Use mock data instead of live API calls</td>
-      </tr>
-    </tbody>
-  </table>
-  <p><strong>Generated command</strong></p>
-  <pre id="cb-output"><code>agents-cli run "Austin, TX"</code></pre>
-  <button type="button" id="cb-copy">Copy command</button>
-</div>
+Optional environment variables:
 
-<script>
-(function () {
-  var locationInput = document.getElementById("cb-location");
-  var skipInput = document.getElementById("cb-skip-mashvisor");
-  var mockInput = document.getElementById("cb-mock-apis");
-  var output = document.getElementById("cb-output");
-  var copyButton = document.getElementById("cb-copy");
+- `SKIP_MASHVISOR=true` — skip financial calculations (legal/compliance data only). Useful if you do not have a Mashvisor API key.
+- `USE_MOCK_APIS=true` — use mock data instead of live API calls. Useful for local testing without API keys.
 
-  if (!locationInput || !skipInput || !mockInput || !output) return;
+Examples:
 
-  function escapeShellArg(value) {
-    return '"' + value.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
-  }
+```bash
+# Full analysis with live APIs
+agents-cli run "Austin, TX"
 
-  function buildCommand() {
-    var location = locationInput.value.trim() || "Austin, TX";
-    var envVars = [];
-    if (skipInput.value === "true") envVars.push("SKIP_MASHVISOR=true");
-    if (mockInput.value === "true") envVars.push("USE_MOCK_APIS=true");
-    var command = "";
-    if (envVars.length) command += envVars.join(" ") + " ";
-    command += "agents-cli run " + escapeShellArg(location);
-    return command;
-  }
+# Legal/compliance only (no Mashvisor key needed)
+SKIP_MASHVISOR=true agents-cli run "Austin, TX"
 
-  function updateCommand() {
-    output.textContent = buildCommand();
-  }
-
-  locationInput.addEventListener("input", updateCommand);
-  skipInput.addEventListener("change", updateCommand);
-  mockInput.addEventListener("change", updateCommand);
-
-  if (copyButton) {
-    copyButton.addEventListener("click", function () {
-      navigator.clipboard.writeText(buildCommand()).then(function () {
-        copyButton.textContent = "Copied!";
-        setTimeout(function () {
-          copyButton.textContent = "Copy command";
-        }, 1500);
-      });
-    });
-  }
-
-  updateCommand();
-})();
-</script>
+# Local testing with mock data
+USE_MOCK_APIS=true agents-cli run "Austin, TX"
+```
 
 ## Run the Playground
 
