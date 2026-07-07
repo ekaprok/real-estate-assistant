@@ -1,6 +1,6 @@
 # Short-Term Rental Market Intelligence Agent
 
-![Short-Term Rental Market Intelligence Agent](images/hero-banner.png)
+![Short-Term Rental Market Intelligence Agent](images/RealEstateLogo.png)
 
 A hybrid system that tells Short-Term Rental (STR) investors where they can legally operate and where the money is—built to be highly cost-effective.
 
