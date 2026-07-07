@@ -336,11 +336,21 @@ Provide the response matching the schema.
 # Step 3: Extract structured legal status from research history
 def extract_legal_status(municipality: str, state: str, research_summary: str) -> LegalStatus:
     prompt = f"""
-Analyze the zoning research summary for {municipality}, {state}. Ensure that the analysis covers all home types (e.g. yurts, tiny homes, cabins, etc.) and execution strategies for the legal report.
-Extract and fill out the structured LegalStatus JSON matching the required schema.
-Evaluate if unique stays / temporary structures (e.g. Yurts, RVs) are prohibited or restricted.
+Extract the structured LegalStatus JSON for short-term rentals (STR) in {municipality}, {state} from the zoning research summary below. Use ONLY facts present in the summary — do not invent ordinance numbers, rates, dates, permit names, or values not supported by the text.
 
-If the research summary does not contain conclusive evidence of STR legality (allowed, restricted, or banned), set status to "UNCLEAR" and set restriction_reason and summary_of_restrictions to state that STR regulations could not be found/confirmed for {municipality}, {state}. Do not invent facts not present in the summary.
+Field-by-field extraction guidance:
+- status: "ALLOWED" if STR is generally permitted, "RESTRICTED" if permitted but subject to significant limits (primary-residence-only, caps, zoning overlays, long minimum stays), "UNCLEAR" if the summary lacks conclusive evidence of legality.
+- restriction_reason: Concise reason for the status. If status is "UNCLEAR", state that STR regulations could not be found/confirmed for {municipality}, {state}.
+- eligible_zones_summary: Where STR is legal within the municipality (zones/overlays). Use "Unknown" if not stated.
+- primary_residence_required: true only if the summary states STR is limited to an owner's primary residence; otherwise false.
+- minimum_stay_days: The minimum number of nights required per booking. Use 0 if the summary confirms there is NO minimum-stay requirement. Use -1 if the minimum stay is unknown or not stated in the summary. Do NOT guess a specific number.
+- permit_cap_exists: true only if the summary states a cap/limit on the number of STR permits or licenses; otherwise false.
+- permits: One entry per required permit/license actually named in the summary. Only include name, process_summary, and application_url that appear in the text; omit permits not mentioned.
+- special_taxes: One entry per STR-specific tax named in the summary (e.g., transient occupancy tax). Include rate only if stated; otherwise leave the rate empty. Do not invent rates.
+- regulatory_trajectory_risk: Summarize any pending changes, moratoria, or active local debate. Use "Unknown" if the summary is silent.
+- summary_of_restrictions: 1-3 sentence plain-language summary of the key rules an investor must comply with. If status is "UNCLEAR", state that STR regulations could not be found/confirmed for {municipality}, {state}.
+
+Only evaluate unique stays / temporary structures (e.g. yurts, RVs, tiny homes, cabins) if the summary discusses them; reflect any such rules in eligible_zones_summary and summary_of_restrictions. Do not fabricate rules for structure types the summary does not mention.
 
 Zoning research summary:
 {research_summary}
@@ -352,11 +362,18 @@ Zoning research summary:
 def synthesize_report(municipality: str, state: str, calculated_data: dict) -> ReportSynthesis:
     calculated_data_str = json_dumps_clean(calculated_data)
     prompt = f"""
-Write a 2-3 sentence qualitative synthesis for a short term rental investment in {municipality}, {state}.
-Use ONLY the following calculated financial and legal data:
-{calculated_data_str}
+You are writing an investor-facing synthesis for a short-term rental (STR) investment in {municipality}, {state}.
 
-Also, generate a list of 2-4 major tourist demand drivers for {municipality}, {state} (using your general world knowledge).
+qualitative_synthesis (2-3 sentences):
+- Base EVERY financial and legal claim strictly on the calculated data below. Do NOT introduce any specific numbers, rates, taxes, permits, or legal conclusions that are not present in that data.
+- If the data is missing or inconclusive for a dimension, say so plainly rather than guessing.
+
+demand_drivers (2-4 items):
+- Major tourist/demand drivers for {municipality}, {state}. You MAY use general world knowledge here.
+- Keep these qualitative (e.g., attractions, events, industries). Do NOT include specific figures, occupancy rates, revenue numbers, or legal claims.
+
+Calculated financial and legal data:
+{calculated_data_str}
 
 Provide the output matching the schema.
 """
