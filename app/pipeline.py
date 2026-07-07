@@ -467,14 +467,15 @@ class Pipeline:
             init_api_counts(len(resolved), reset=False)
 
             # Report-level cache lookup based on resolved parameters.
-            cache_key = self._report_cache_key(resolved)
-            if cache_key is not None:
-                cached = get_cached_response(cache_key)
-                if cached is not None:
-                    logger.info(f"Cache hit for report key {cache_key}")
-                    logger.info(f"Final Report:\n{cached}")
-                    return cached
-                logger.info(f"Cache miss for report key {cache_key}")
+            # TODO: Re-enable report caching once cache invalidation strategy is defined.
+            # cache_key = self._report_cache_key(resolved)
+            # if cache_key is not None:
+            #     cached = get_cached_response(cache_key)
+            #     if cached is not None:
+            #         logger.info(f"Cache hit for report key {cache_key}")
+            #         logger.info(f"Final Report:\n{cached}")
+            #         return cached
+            #     logger.info(f"Cache miss for report key {cache_key}")
 
             # Steps 2-3: legal screening.
             outcome = LegalScreener().screen_all(resolved)
@@ -487,8 +488,9 @@ class Pipeline:
                 inputs.target_locations, survived, outcome, self.skip_mashvisor
             )
 
-            if cache_key is not None:
-                set_cached_response(cache_key, report_yaml)
+            # TODO: Re-enable report caching once cache invalidation strategy is defined.
+            # if cache_key is not None:
+            #     set_cached_response(cache_key, report_yaml)
 
             logger.info(
                 f"Pipeline completed successfully. API call counts: {get_current_counts()}"

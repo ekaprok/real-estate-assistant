@@ -22,9 +22,9 @@ CALLS_PER_MUNICIPALITY = {
     "overpass_api": 1,
     "mashvisor_api": 1,
     "llm_gemini_flash": 3,  # macro screen + extract + synthesis per municipality
-    "llm_gemini_flash_loop": 6,  # executor + evaluator, up to 3 loop iterations
-    "serper_dev_search": 5,  # macro screen + deep-research searches
-    "web_scraper_fetch_page": 6,  # top 2-3 URLs per loop iteration
+    "llm_gemini_flash_loop": 25,  # executor + evaluator, up to 3 loop iterations (up to 4 calls per iteration)
+    "serper_dev_search": 20,  # macro screen + deep-research searches (up to 3 searches per iteration)
+    "web_scraper_fetch_page": 10,  # top 2-3 URLs per loop iteration
 }
 
 # Run-wide base calls not tied to a specific municipality (e.g. prompt parsing).

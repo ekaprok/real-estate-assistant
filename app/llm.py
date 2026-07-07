@@ -164,6 +164,31 @@ async def count_agent_model_call(callback_context, llm_request) -> None:
     increment_api_count("llm_gemini_flash_loop")
 
 @node
+def check_executor_output(ctx: Context, node_input: dict | str | None = None):
+    """Circuit breaker: If the executor encountered a fetch failure, deterministically skip the evaluator and force a retry."""
+    findings = ctx.state.get("research_findings", "")
+    iterations = ctx.state.get("research_iterations", 0)
+
+    # If we hit a fetch failure, we deterministically force a retry to save Evaluator LLM calls.
+    if "[FETCH_FAILED]" in findings:
+        if iterations < 2:  # Allow up to 3 total tries (0, 1, 2)
+            logger.info("[check_executor_output] Circuit breaker triggered: unreadable source. Forcing alternative source search.")
+            ctx.state["research_iterations"] = iterations + 1
+
+            # Inject deterministic feedback to force the executor to try something else
+            ctx.state["research_evaluation"] = {
+                "grade": "fail",
+                "comment": "A source you tried to read was inaccessible or an unreadable scanned PDF. You MUST try a different search query or a different URL. Do not retry the same URL.",
+                "follow_up_queries": [{"search_query": "alternative sources short term rental"}]
+            }
+            return Event(route="retry")
+        else:
+            logger.info("[check_executor_output] Max iterations reached after fetch failure. Aborting.")
+            return Event(route="abort")
+
+    return Event(route="evaluate")
+
+@node
 def check_evaluation(ctx: Context, node_input: dict):
     """Checks research evaluation and counts iterations to handle loop routing."""
     iterations = ctx.state.get("research_iterations", 0) + 1
@@ -182,7 +207,7 @@ def check_evaluation(ctx: Context, node_input: dict):
         return Event(route="fail", state=state_delta, output="Continue research based on feedback.")
 
 @node
-def finish_research(ctx: Context, node_input: dict):
+def finish_research(ctx: Context, node_input: dict | None = None):
     """Terminal node: research loop complete; research_findings remains in session state."""
     logger.info("[finish_research] Research loop complete.")
     return Event(output="Research complete.")
@@ -202,6 +227,7 @@ ANTI-HALLUCINATION RULES (mandatory):
 - Prioritize official/authoritative sources: .gov, .us, municode.com, ecode360.com, amlegal.com. Scrape the top 2-3 highest-confidence URLs per iteration.
 - Attach the source URL to each factual claim in your summary.
 - If a fact (permit cap, minimum stay, tax rate, ordinance text) is not found in scraped text, write "NOT FOUND / UNCLEAR" for that fact — do not guess.
+- If you encounter `[FETCH_FAILED]`, it means the page is inaccessible (e.g., bot protection, dead link, or scanned PDF). Do not keep trying to read the same URL. Look for alternative sources (like news articles, third-party summaries, or city council minutes). DO NOT include the exact string `[FETCH_FAILED]` in your final summary.
 - Stop issuing further searches once you have conclusively determined the info is unavailable after targeted attempts.
 
 Research checklist:
@@ -234,7 +260,7 @@ Does it clearly answer:
 3. Regulatory trajectory?
 4. Unique stays rules (e.g. yurts, RVs, tiny homes, cabins, temporary structures)?
 
-Grade 'pass' only if all details (including unique stays) are found or conclusively proven unavailable in official sources. Otherwise grade 'fail' and provide explicit follow_up_queries targeting the exact missing information.
+Grade 'pass' only if all details (including unique stays) are found or conclusively proven unavailable in official sources. Also grade 'pass' if the official sources are conclusively proven to be inaccessible or unreadable (e.g., returning `[FETCH_FAILED]`) and no other readable sources are available. Otherwise grade 'fail' and provide explicit follow_up_queries targeting the exact missing information.
 
 Verify that claims are grounded in scraped source text with URLs — fail if the research appears to guess or lacks source citations for key facts.
 """,
@@ -245,7 +271,12 @@ Verify that claims are grounded in scraped source text with URLs — fail if the
 
     edges = [
         ('START', research_executor),
-        (research_executor, research_evaluator),
+        (research_executor, check_executor_output),
+        (check_executor_output, {
+            "evaluate": research_evaluator,
+            "retry": research_executor,
+            "abort": finish_research
+        }),
         (research_evaluator, check_evaluation),
         (check_evaluation, {
             "pass": finish_research,

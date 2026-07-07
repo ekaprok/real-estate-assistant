@@ -104,12 +104,12 @@ def _execute_serper_request(url: str, headers: dict, query: str) -> dict:
     wait=wait_exponential(multiplier=1, min=2, max=10),
     reraise=True
 )
-def _execute_fetch_request(url: str, headers: dict) -> str:
+def _execute_fetch_request(url: str, headers: dict) -> requests.Response:
     """Executes the Page Fetch request with retry logic."""
     logger.info(f"Executing fetch request for URL: {url}")
     response = requests.get(url, headers=headers, timeout=15)
     response.raise_for_status()
-    return response.text
+    return response
 
 @with_cache("search")
 def serper_search(query: str) -> dict:
@@ -181,14 +181,26 @@ def fetch_page(url: str) -> dict:
     # Real Scrape HTTP Call with tenacity retry
     try:
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) RealEstateAssistant/1.0"}
-        html_content = _execute_fetch_request(url, headers)
+        response = _execute_fetch_request(url, headers)
 
-        soup = BeautifulSoup(html_content, "html.parser")
-        # Remove script/style tags
-        for element in soup(["script", "style", "nav", "footer", "header"]):
-            element.decompose()
+        content_type = response.headers.get('Content-Type', '').lower()
 
-        text = soup.get_text(separator=" ").strip()
+        if 'application/pdf' in content_type or url.lower().endswith('.pdf'):
+            import io
+            from pypdf import PdfReader
+            pdf_file = io.BytesIO(response.content)
+            reader = PdfReader(pdf_file)
+            text = " ".join(page.extract_text() for page in reader.pages if page.extract_text())
+            if not text.strip():
+                text = "[FETCH_FAILED] The document at this URL is a scanned image or unreadable PDF. No text could be extracted."
+        else:
+            html_content = response.text
+            soup = BeautifulSoup(html_content, "html.parser")
+            # Remove script/style tags
+            for element in soup(["script", "style", "nav", "footer", "header"]):
+                element.decompose()
+            text = soup.get_text(separator=" ").strip()
+
         # Clean up whitespace
         text = " ".join(text.split())
         text = filter_str_relevant_text(text)
@@ -196,7 +208,7 @@ def fetch_page(url: str) -> dict:
         return {"url": url, "text": text}
     except Exception as e:
         logger.error(f"Web scraper call failed after retries for URL {url}: {e}.")
-        fallback_text = "Error: Page could not be accessed. The site may block scrapers or is down. Please try a different search or source."
+        fallback_text = "[FETCH_FAILED] Error: Page could not be accessed. The site may block scrapers or is down. Please try a different search or source."
 
         if _use_mock_apis():
             logger.error(f"Falling back to mock.")
