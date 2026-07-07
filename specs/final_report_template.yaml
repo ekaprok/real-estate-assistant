@@ -14,7 +14,13 @@ report_metadata:
 
   data_sources:
     financial_data_source: "Mashvisor"
-    legal_data_source: "Serper.dev web search + municipal / Municode / eCode360 / AmLegal scrape"
+    legal_data_source:
+      method: "Serper.dev web search + municipal / Municode / eCode360 / AmLegal scrape"
+      # Exact, de-duplicated list of every link the legal findings were generated from,
+      # aggregated across all municipalities in this report.
+      source_urls:
+        - "https://www.gatlinburgtn.gov/departments/finance/business_licenses.php"
+        - "https://library.municode.com/tn/gatlinburg/codes/code_of_ordinances"
 
 # Ranked list of all municipalities that survived legal, budget, and financial screening, sorted by recommendation
 survived_municipalities:
@@ -55,6 +61,10 @@ survived_municipalities:
       # found in news and council minutes. It's a rough heads-up, so it only nudges the legal score, not a hard rule.
       regulatory_trajectory_risk: "Low risk. STRs are a primary economic driver for the city."
       summary_of_restrictions: "Highly favorable for STRs, provided the property is within the correct zoning overlay and passes fire inspection."
+      # Exact links the legal findings for this municipality were generated from.
+      source_urls:
+        - "https://www.gatlinburgtn.gov/departments/finance/business_licenses.php"
+        - "https://library.municode.com/tn/gatlinburg/codes/code_of_ordinances"
 
     # HOAs are private and cannot be verified by this system — a disclaimer only, not a data point.
     hoa_disclaimer: "Resort and planned communities in this market commonly carry HOAs whose CC&Rs may restrict STRs. This system verifies only government zoning/law — confirm HOA rules independently before closing."
@@ -110,6 +120,8 @@ banned_municipalities:
       municipality: "New York"
       state: "NY"
     restriction_reason: "Local Law 18 strictly prohibits short-term rentals under 30 days unless the host is present."
+    source_urls:
+      - "https://www.nyc.gov/site/specialenforcement/registration-law/registration-law-for-hosts.page"
 
 # Municipalities where legal verification could not be completed (API budget exhausted or research inconclusive).
 undetermined_municipalities:

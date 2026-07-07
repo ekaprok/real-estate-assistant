@@ -1,4 +1,6 @@
 import os
+import re
+import threading
 import requests
 import logging
 
@@ -9,6 +11,48 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 # Configure logger
 logger = logging.getLogger(__name__)
+
+# Thread-safe registry of source URLs successfully read during a research run.
+# The deep-legal ReAct loop may execute tool calls on worker threads, so a
+# lock-protected module-level list is used instead of a ContextVar.
+_sources_lock = threading.Lock()
+_fetched_sources: list[str] = []
+
+_URL_PATTERN = re.compile(r"https?://[^\s\)\]\}\"'<>]+")
+
+
+def reset_fetched_sources() -> None:
+    """Clear the recorded source URLs before a new research run begins."""
+    with _sources_lock:
+        _fetched_sources.clear()
+
+
+def get_fetched_sources() -> list[str]:
+    """Return the source URLs successfully read so far, in first-seen order."""
+    with _sources_lock:
+        return list(_fetched_sources)
+
+
+def _record_source(url: str) -> None:
+    """Register a source URL, de-duplicating while preserving order."""
+    cleaned = url.strip().rstrip(".,;")
+    if not cleaned:
+        return
+    with _sources_lock:
+        if cleaned not in _fetched_sources:
+            _fetched_sources.append(cleaned)
+
+
+def extract_source_urls(text: str) -> list[str]:
+    """Extract de-duplicated http(s) URLs cited in free-form research text."""
+    if not text:
+        return []
+    seen: list[str] = []
+    for match in _URL_PATTERN.findall(text):
+        cleaned = match.rstrip(".,;")
+        if cleaned and cleaned not in seen:
+            seen.append(cleaned)
+    return seen
 
 # Load .env file manually at import time
 def load_env_file():
@@ -156,7 +200,6 @@ def serper_search(query: str) -> dict:
             return MOCK_SEARCH_RESULTS.get("gatlinburg", {})
         raise e
 
-@with_cache("fetch")
 def fetch_page(url: str) -> dict:
     """Downloads the full text of a zoning code or webpage. Enforces limits and caches.
 
@@ -166,6 +209,17 @@ def fetch_page(url: str) -> dict:
     Returns:
         A dictionary with 'url' and 'text' keys.
     """
+    result = _fetch_page_cached(url)
+    text = result.get("text", "") if isinstance(result, dict) else ""
+    # Only credit sources whose content was actually readable, so the report's
+    # source list reflects the exact links the findings were generated from.
+    if "[FETCH_FAILED]" not in text:
+        _record_source(result.get("url", url) if isinstance(result, dict) else url)
+    return result
+
+
+@with_cache("fetch")
+def _fetch_page_cached(url: str) -> dict:
     increment_api_count("web_scraper_fetch_page")
 
     if _use_mock_apis():

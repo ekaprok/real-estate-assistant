@@ -46,6 +46,11 @@ from app.llm import (
     synthesize_report,
 )
 from app.mock_handlers import _use_mock_apis, mock_research_summary
+from app.tools import (
+    extract_source_urls,
+    get_fetched_sources,
+    reset_fetched_sources,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -221,7 +226,9 @@ class LegalScreener:
 
             research_prompt = generate_research_prompt(name, state, muni.county)
             logger.info(f"Step 3: Executing Deep Legal verification loop for {name}, {state}...")
+            reset_fetched_sources()
             research_summary = asyncio.run(run_agent(self._agent, research_prompt))
+            sources = self._collect_sources(research_summary)
 
             legal_status = extract_legal_status(name, state, research_summary)
             logger.info(
@@ -237,6 +244,7 @@ class LegalScreener:
                     {
                         "location": muni.location_dict(),
                         "restriction_reason": legal_status.restriction_reason,
+                        "source_urls": sources,
                     }
                 )
                 return
@@ -245,9 +253,11 @@ class LegalScreener:
                 f"Municipality {name}, {state} passed legal verification. "
                 "Adding to surviving list."
             )
+            legal_and_compliance = ReportBuilder.legal_and_compliance(legal_status)
+            legal_and_compliance["source_urls"] = sources
             base_muni_data = {
                 "location": muni.location_dict(include_county=True),
-                "legal_and_compliance": ReportBuilder.legal_and_compliance(legal_status),
+                "legal_and_compliance": legal_and_compliance,
                 # TODO: Define a proper HOA disclaimer instead of a static string
                 "hoa_disclaimer": HOA_DISCLAIMER,
             }
@@ -262,8 +272,19 @@ class LegalScreener:
                 {
                     "location": muni.location_dict(),
                     "reason": f"Legal verification could not be completed: {e}",
+                    "source_urls": get_fetched_sources(),
                 }
             )
+
+    @staticmethod
+    def _collect_sources(research_summary: str) -> list[str]:
+        """Exact links the findings came from: pages actually read, plus any
+        additional URLs cited in the summary (recovers sources on cache hits)."""
+        sources = get_fetched_sources()
+        for url in extract_source_urls(research_summary):
+            if url not in sources:
+                sources.append(url)
+        return sources
 
 
 class FinancialAnalyzer:
@@ -388,6 +409,23 @@ class ReportBuilder:
         return ranked
 
     @staticmethod
+    def _aggregate_source_urls(
+        survived: list[dict], outcome: ScreeningOutcome
+    ) -> list[str]:
+        """Exact, de-duplicated list of links this report was generated from."""
+        aggregated: list[str] = []
+        source_lists = (
+            [m.get("legal_and_compliance", {}).get("source_urls", []) for m in survived]
+            + [b.get("source_urls", []) for b in outcome.banned]
+            + [u.get("source_urls", []) for u in outcome.undetermined]
+        )
+        for urls in source_lists:
+            for url in urls:
+                if url not in aggregated:
+                    aggregated.append(url)
+        return aggregated
+
+    @staticmethod
     def _dump(report: dict) -> str:
         return yaml.dump(report, default_flow_style=False, sort_keys=False)
 
@@ -463,10 +501,13 @@ class ReportBuilder:
                 "user_inputs": {"target_locations": target_locations},
                 "data_sources": {
                     "financial_data_source": "Mashvisor",
-                    "legal_data_source": (
-                        "Serper.dev web search + municipal / Municode / eCode360 / "
-                        "AmLegal scrape"
-                    ),
+                    "legal_data_source": {
+                        "method": (
+                            "Serper.dev web search + municipal / Municode / "
+                            "eCode360 / AmLegal scrape"
+                        ),
+                        "source_urls": self._aggregate_source_urls(survived, outcome),
+                    },
                 },
             },
             "survived_municipalities": survived,
