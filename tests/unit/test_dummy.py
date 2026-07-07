@@ -75,7 +75,7 @@ def test_query_mashvisor_mock():
         res = query_mashvisor_api("Gatlinburg", "TN")
         assert res["sample_size"] == 142
         assert res["median_property_price"] == 450000
-        assert res["average_daily_rate_adr"] == 285
+        assert res["average_cap_rate_percentage"] == 7.8
 
         res_default = query_mashvisor_api("Unknown City", "XX")
         assert res_default["sample_size"] == 142
@@ -84,7 +84,7 @@ def test_query_mashvisor_mock():
             del os.environ["USE_MOCK_APIS"]
         else:
             os.environ["USE_MOCK_APIS"] = orig
-    assert res_default["average_daily_rate_adr"] == 285
+    assert res_default["average_cap_rate_percentage"] == 7.8
 
 def test_serper_search_mock():
     init_api_counts()

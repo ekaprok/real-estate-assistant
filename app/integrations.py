@@ -27,6 +27,30 @@ def is_placeholder_or_missing(key: str | None) -> bool:
     key_lower = key.lower()
     return any(p in key_lower for p in ["your_", "placeholder", "key_here", "prod_mashvisor"])
 
+
+def _to_float(value) -> float:
+    """Coerce a Mashvisor field to float, defaulting to 0.0 on missing/bad data."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _to_int(value) -> int:
+    return int(_to_float(value))
+
+
+def _empty_mashvisor_result() -> dict:
+    """Zeroed metrics for municipalities Mashvisor has no city coverage for."""
+    return {
+        "sample_size": 0,
+        "median_property_price": 0,
+        "annual_occupancy_rate_percentage": 0,
+        "average_cap_rate_percentage": 0.0,
+        "monthly_rental_income": 0,
+        "airbnb_properties_count": 0,
+    }
+
 @with_cache("geocode")
 def geocode_location(location_query: str) -> list[dict]:
     """Resolves target geography to coordinates/bounding box. Encapsulates count & caching."""
@@ -145,27 +169,59 @@ def query_mashvisor_api(municipality: str, state: str) -> dict:
     if not mashvisor_key or is_placeholder_or_missing(mashvisor_key):
         raise ValueError("Mashvisor API key is missing or is a placeholder, but USE_MOCK_APIS is False.")
 
-    # Real Mashvisor API request
+    # Real Mashvisor API request.
+    #
+    # We use the city-level investment endpoint, which returns aggregate median
+    # performance for the whole municipality in a single call:
+    #   GET /v1.1/client/city/investment/{state}/{city}
+    # This is both simpler and more accurate than pulling the raw property list
+    # and computing medians client-side. We only surface the fields this endpoint
+    # actually returns (median_price, occupancy, airbnb_cap_rate, airbnb_rental,
+    # and the comp counts); no synthetic ADR/opex/seasonality/growth values.
     try:
-        # We query the market trends/summary endpoint.
-        url = "https://api.mashvisor.com/v1.1/client/city/properties"
-        headers = {"x-api-key": mashvisor_key}
-        params = {"state": state, "city": municipality}
-        response = requests.get(url, headers=headers, params=params, timeout=15)
+        import urllib.parse
+
+        state_enc = urllib.parse.quote(state)
+        city_enc = urllib.parse.quote(municipality)
+
+        # RapidAPI-hosted keys ("msh" identifier) use a different host/header.
+        if "msh" in mashvisor_key:
+            url = f"https://mashvisor-api.p.rapidapi.com/city/investment/{state_enc}/{city_enc}"
+            headers = {
+                "X-RapidAPI-Key": mashvisor_key,
+                "X-RapidAPI-Host": "mashvisor-api.p.rapidapi.com",
+            }
+        else:
+            url = f"https://api.mashvisor.com/v1.1/client/city/investment/{state_enc}/{city_enc}"
+            headers = {"x-api-key": mashvisor_key}
+
+        response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json()
-
-        # Log successful request
         logger.info(f"Successfully fetched live Mashvisor data for {municipality}, {state}.")
 
-        # Since the actual Mashvisor API returns a deeply nested payload and the rest of the
-        # application expects the flat schema defined in the mocks, we would map the
-        # response properties here (e.g. data['content']['median_price'] -> 'median_property_price').
-        # For stability, if mapping isn't fully implemented for the paid schema,
-        # we can gracefully degrade to mock structural data after ensuring the API request succeeded.
-        # TODO: Complete the rigorous mapping from raw live Mashvisor payload to our unified schema.
-        # If mock mode is disabled, we cannot return mocks here.
-        raise NotImplementedError("Live Mashvisor API payload mapping is not yet implemented, and mock fallback is disabled because USE_MOCK_APIS is False.")
+        # Errors can arrive embedded in a 200 response (e.g. {'message': '...'}).
+        if "message" in data and len(data) == 1:
+            raise ValueError(f"Mashvisor API returned an error message: {data['message']}")
+
+        content = data.get("content")
+        if not isinstance(content, dict):
+            logger.warning(
+                f"No city investment data for {municipality}, {state}. "
+                "Returning empty metrics."
+            )
+            return _empty_mashvisor_result()
+
+        return {
+            # investment_properties = comp pool backing the medians; drives data quality.
+            "sample_size": _to_int(content.get("investment_properties")),
+            "median_property_price": _to_int(content.get("median_price")),
+            "annual_occupancy_rate_percentage": _to_int(content.get("occupancy")),
+            "average_cap_rate_percentage": round(_to_float(content.get("airbnb_cap_rate")), 1),
+            # airbnb_rental is Mashvisor's median monthly Airbnb income.
+            "monthly_rental_income": _to_int(content.get("airbnb_rental")),
+            "airbnb_properties_count": _to_int(content.get("airbnb_properties")),
+        }
     except Exception as e:
         logger.error(f"Mashvisor API request failed for {municipality}, {state}: {e}")
         raise e

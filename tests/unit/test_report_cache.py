@@ -54,24 +54,10 @@ def mock_all_apis():
         mock_mashvisor.return_value = MOCK_MASHVISOR_DB.get("Jersey City", {
             "sample_size": 10,
             "median_property_price": 500000,
-            "average_daily_rate_adr": 200,
             "annual_occupancy_rate_percentage": 60,
-            "estimated_opex": {
-                "property_management_pct": 15,
-                "insurance_pct": 3,
-                "utilities_pct": 5,
-                "property_taxes_pct": 5
-            },
-            "active_listings_count": 5,
-            "listings_growth_yoy_percentage": 2.0,
-            "revenue_growth_yoy_percentage": 3.0,
-            "seasonality_summary": "High",
-            "optimal_config": {
-                "property_type": "Cabin",
-                "bedrooms": 2,
-                "bathrooms": 2,
-                "accommodates": 4
-            }
+            "average_cap_rate_percentage": 6.0,
+            "monthly_rental_income": 4000,
+            "airbnb_properties_count": 5,
         })
         mock_synth.return_value = ReportSynthesis(qualitative_synthesis="Test synthesis")
 
@@ -130,24 +116,10 @@ def test_pipeline_does_not_cache_api_limit_exceeded_error(mock_all_apis):
     mock_all_apis["mashvisor"].return_value = {
         "sample_size": 10,
         "median_property_price": 500000,
-        "average_daily_rate_adr": 200,
         "annual_occupancy_rate_percentage": 60,
-        "estimated_opex": {
-            "property_management_pct": 15,
-            "insurance_pct": 3,
-            "utilities_pct": 5,
-            "property_taxes_pct": 5
-        },
-        "active_listings_count": 5,
-        "listings_growth_yoy_percentage": 2.0,
-        "revenue_growth_yoy_percentage": 3.0,
-        "seasonality_summary": "High",
-        "optimal_config": {
-            "property_type": "Cabin",
-            "bedrooms": 2,
-            "bathrooms": 2,
-            "accommodates": 4
-        }
+        "average_cap_rate_percentage": 6.0,
+        "monthly_rental_income": 4000,
+        "airbnb_properties_count": 5,
     }
 
     res2 = run_pipeline("Gatlinburg cabins")

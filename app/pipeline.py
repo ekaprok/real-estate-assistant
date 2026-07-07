@@ -31,9 +31,7 @@ from app.api_limits import (
 from app.app_utils.cache import get_cached_response, set_cached_response, with_cache
 from app.app_utils.finance import (
     calculate_annual_revenue,
-    calculate_cap_rate,
     calculate_noi,
-    calculate_opex_breakdown,
     determine_data_quality,
 )
 from app.integrations import geocode_location, query_mashvisor_api
@@ -321,48 +319,37 @@ class FinancialAnalyzer:
         return {
             **base_muni_data,
             "financial_metrics": financial_metrics,
-            "optimal_property_configuration": {
-                "property_type": mv_data["optimal_config"]["property_type"],
-                "bedrooms": mv_data["optimal_config"]["bedrooms"],
-                "bathrooms": mv_data["optimal_config"]["bathrooms"],
-                "accommodates": mv_data["optimal_config"]["accommodates"],
-            },
             "demand_drivers": synthesis_res.demand_drivers,
             "qualitative_synthesis": synthesis_res.qualitative_synthesis,
         }
 
     @staticmethod
     def _compute_financial_metrics(mv_data: dict) -> dict:
-        sample_size = mv_data["sample_size"]
-        median_price = mv_data["median_property_price"]
-        adr = mv_data["average_daily_rate_adr"]
-        occ = mv_data["annual_occupancy_rate_percentage"]
+        """Build the report's financial metrics from Mashvisor city-level data.
 
-        annual_revenue = calculate_annual_revenue(adr, occ)
-        opex_breakdown, total_annual_opex, total_opex_pct = calculate_opex_breakdown(
-            annual_revenue, mv_data["estimated_opex"]
-        )
-        annual_noi = calculate_noi(annual_revenue, total_annual_opex)
-        cap_rate = calculate_cap_rate(annual_noi, median_price)
+        Every field here is either returned directly by the Mashvisor
+        ``city/investment`` endpoint or derived from those fields:
+        revenue = monthly rental income x 12, and NOI = cap_rate x median price.
+        """
+        # Read defensively: a partial API response (or a stale cache entry from
+        # an earlier schema) should degrade to zeros, not crash the response stream.
+        sample_size = mv_data.get("sample_size", 0)
+        median_price = mv_data.get("median_property_price", 0)
+        occ = mv_data.get("annual_occupancy_rate_percentage", 0)
+        cap_rate = mv_data.get("average_cap_rate_percentage", 0.0)
+
+        annual_revenue = calculate_annual_revenue(mv_data.get("monthly_rental_income", 0))
+        annual_noi = calculate_noi(cap_rate, median_price)
 
         return {
             "sample_size": sample_size,
             "data_quality": determine_data_quality(sample_size),
             "median_property_price": median_price,
-            "average_daily_rate_adr": adr,
             "annual_occupancy_rate_percentage": occ,
             "annual_revenue_estimate": annual_revenue,
             "annual_noi_estimate": annual_noi,
             "average_cap_rate_percentage": cap_rate,
-            "active_listings_count": mv_data["active_listings_count"],
-            "listings_growth_yoy_percentage": mv_data["listings_growth_yoy_percentage"],
-            "revenue_growth_yoy_percentage": mv_data["revenue_growth_yoy_percentage"],
-            "seasonality_summary": mv_data["seasonality_summary"],
-            "estimated_opex": {
-                "total_annual": total_annual_opex,
-                "total_percentage_of_revenue": total_opex_pct,
-                "breakdown": opex_breakdown,
-            },
+            "airbnb_properties_count": mv_data.get("airbnb_properties_count", 0),
         }
 
 
@@ -568,14 +555,14 @@ class Pipeline:
 
             # Report-level cache lookup based on resolved parameters.
             # TODO: Re-enable report caching once cache invalidation strategy is defined.
-            # cache_key = self._report_cache_key(resolved)
-            # if cache_key is not None:
-            #     cached = get_cached_response(cache_key)
-            #     if cached is not None:
-            #         logger.info(f"Cache hit for report key {cache_key}")
-            #         logger.info(f"Final Report:\n{cached}")
-            #         return cached
-            #     logger.info(f"Cache miss for report key {cache_key}")
+            cache_key = self._report_cache_key(resolved)
+            if cache_key is not None:
+                cached = get_cached_response(cache_key)
+                if cached is not None:
+                    logger.info(f"Cache hit for report key {cache_key}")
+                    logger.info(f"Final Report:\n{cached}")
+                    return cached
+                logger.info(f"Cache miss for report key {cache_key}")
 
             # Steps 2-3: legal screening.
             outcome = LegalScreener().screen_all(resolved)
@@ -589,8 +576,8 @@ class Pipeline:
             )
 
             # TODO: Re-enable report caching once cache invalidation strategy is defined.
-            # if cache_key is not None:
-            #     set_cached_response(cache_key, report_yaml)
+            if cache_key is not None:
+                set_cached_response(cache_key, report_yaml)
 
             logger.info(
                 f"Pipeline completed successfully. API call counts: {get_current_counts()}"

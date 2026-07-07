@@ -96,7 +96,7 @@ class StrReportAgent(BaseAgent):
             parsed = yaml.safe_load(report_yaml)
             if isinstance(parsed, dict) and parsed.get("error") and parsed.get("message"):
                 response_text = (
-                    f"{parsed['message']}"
+                    f"I'd love to help! {parsed['message']}"
                 )
         except yaml.YAMLError:
             pass

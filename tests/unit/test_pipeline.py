@@ -66,24 +66,10 @@ def make_mashvisor_data(**overrides) -> dict:
     data = {
         "sample_size": 100,
         "median_property_price": 500000,
-        "average_daily_rate_adr": 200,
         "annual_occupancy_rate_percentage": 60,
-        "estimated_opex": {
-            "property_management_pct": 15,
-            "insurance_pct": 3,
-            "utilities_pct": 5,
-            "property_taxes_pct": 5,
-        },
-        "active_listings_count": 5,
-        "listings_growth_yoy_percentage": 2.0,
-        "revenue_growth_yoy_percentage": 3.0,
-        "seasonality_summary": "High summer season",
-        "optimal_config": {
-            "property_type": "Cabin",
-            "bedrooms": 2,
-            "bathrooms": 2,
-            "accommodates": 4,
-        },
+        "average_cap_rate_percentage": 6.0,
+        "monthly_rental_income": 4000,
+        "airbnb_properties_count": 250,
     }
     data.update(overrides)
     return data
@@ -251,15 +237,31 @@ class TestFinancialAnalyzer:
     def test_compute_financial_metrics(self):
         metrics = FinancialAnalyzer._compute_financial_metrics(make_mashvisor_data())
 
-        # adr * 365 * occupancy -> 200 * 365 * 0.60
-        assert metrics["annual_revenue_estimate"] == 43800
+        # revenue = monthly rental income * 12 -> 4000 * 12
+        assert metrics["annual_revenue_estimate"] == 48000
         assert metrics["data_quality"] == "high"  # sample_size 100 >= 80
-        assert metrics["estimated_opex"]["total_percentage_of_revenue"] == 28
-        assert metrics["annual_noi_estimate"] == (
-            metrics["annual_revenue_estimate"]
-            - metrics["estimated_opex"]["total_annual"]
-        )
-        assert "average_cap_rate_percentage" in metrics
+        # NOI = cap_rate% * median_price -> 6.0% * 500000
+        assert metrics["annual_noi_estimate"] == 30000
+        assert metrics["average_cap_rate_percentage"] == 6.0
+        assert metrics["airbnb_properties_count"] == 250
+        # Unsupported fields must not leak back into the report.
+        assert "average_daily_rate_adr" not in metrics
+        assert "estimated_opex" not in metrics
+
+    def test_compute_financial_metrics_tolerates_partial_data(self):
+        # A stale-cache / old-schema payload lacking the new keys must degrade
+        # to zeros rather than raising a KeyError mid-stream.
+        legacy = {
+            "median_property_price": 500000,
+            "annual_occupancy_rate_percentage": 60,
+            "average_cap_rate_percentage": 6.0,
+            "average_daily_rate_adr": 200,  # obsolete field, should be ignored
+        }
+        metrics = FinancialAnalyzer._compute_financial_metrics(legacy)
+        assert metrics["annual_revenue_estimate"] == 0  # no monthly_rental_income
+        assert metrics["airbnb_properties_count"] == 0
+        assert metrics["sample_size"] == 0
+        assert metrics["annual_noi_estimate"] == 30000  # cap_rate x price still works
 
     def test_analyze_one_skip_mashvisor_returns_base(self):
         base = {"location": {"municipality": "Austin", "state": "TX"}}
@@ -291,8 +293,8 @@ class TestFinancialAnalyzer:
         ):
             result = FinancialAnalyzer(skip_mashvisor=False)._analyze_one(item)
 
-        assert result["financial_metrics"]["annual_revenue_estimate"] == 43800
-        assert result["optimal_property_configuration"]["property_type"] == "Cabin"
+        assert result["financial_metrics"]["annual_revenue_estimate"] == 48000
+        assert "optimal_property_configuration" not in result
         assert result["demand_drivers"] == ["Tourism"]
         assert result["qualitative_synthesis"] == "Great market"
 

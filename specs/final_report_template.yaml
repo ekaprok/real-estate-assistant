@@ -69,44 +69,18 @@ survived_municipalities:
     # HOAs are private and cannot be verified by this system — a disclaimer only, not a data point.
     hoa_disclaimer: "Resort and planned communities in this market commonly carry HOAs whose CC&Rs may restrict STRs. This system verifies only government zoning/law — confirm HOA rules independently before closing."
 
-    # Step 4 Output: Municipal Financial Metrics (Mashvisor city-level Lookup + Historical Performance)
+    # Step 4 Output: Municipal Financial Metrics (Mashvisor city/investment endpoint).
     financial_metrics:
-      # Mashvisor comp pool size for this municipality — higher = more reliable medians
+      # Mashvisor investment comp pool size for this municipality — higher = more reliable medians
       sample_size: 142
       data_quality: "high"  # high (≥80) | medium (≥30) | low (≥15) | very_low (<15)
 
-      median_property_price: 450000
-      average_daily_rate_adr: 285
-      annual_occupancy_rate_percentage: 68
-      annual_revenue_estimate: 70737  # Gross rental income (ADR × 365 × occupancy)
-      annual_noi_estimate: 50931      # Gross revenue minus operating expenses
-      average_cap_rate_percentage: 7.4  # Primary yield metric (no user-specific financing assumed)
-
-      active_listings_count: 3450            # Competition density; gives the growth %s a base to interpret
-      listings_growth_yoy_percentage: 2.1    # Supply trend — how fast new STRs are entering the market
-      revenue_growth_yoy_percentage: 4.2     # Demand trend — revenue here outpaces supply, a healthy sign
-      # Cash-flow risk (separate from saturation): concentrated income means long dead months to carry.
-      seasonality_summary: "High — ~60% of revenue between June and October; weakest Nov–Feb."
-
-      # Operating expenses from Mashvisor expenses_map (only categories the API returns)
-      estimated_opex:
-        total_annual: 19806
-        total_percentage_of_revenue: 28
-        breakdown:
-          property_management: { annual: 10611, percentage_of_revenue: 15 }
-          insurance: { annual: 2122, percentage_of_revenue: 3 }
-          utilities: { annual: 3537, percentage_of_revenue: 5 }
-          property_taxes: { annual: 3536, percentage_of_revenue: 5 }
-
-    # Discovered from Mashvisor city-level subgroups (bed/bath/type) — not user preference
-    optimal_property_configuration:
-      property_type: "Cabin"
-      bedrooms: 3
-      bathrooms: 2.5
-      accommodates: 8
-      # high_impact_amenities: DEFERRED to Future work (AirDNA). Mashvisor lists per-listing
-      # amenities but does not attribute ADR/occupancy lift, so this cannot be reliably produced.
-      # high_impact_amenities: ["Hot Tub", "Mountain View", "Fire Pit"]
+      median_property_price: 450000                # Mashvisor: median_price
+      annual_occupancy_rate_percentage: 68         # Mashvisor: occupancy
+      annual_revenue_estimate: 70740               # Derived: monthly airbnb_rental × 12
+      annual_noi_estimate: 33300                   # Derived: (cap_rate / 100) × median_property_price
+      average_cap_rate_percentage: 7.4             # Mashvisor: airbnb_cap_rate — primary yield metric
+      airbnb_properties_count: 3450                # Mashvisor: airbnb_properties — STR comp / competition density
 
     # Web-search demand context for the market
     demand_drivers: ["Great Smoky Mountains NP gateway", "Ober Mountain ski area", "Dollywood"]
