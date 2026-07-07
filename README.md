@@ -35,7 +35,7 @@ agents-cli install
 
 Before running the project, you need to set up your API keys. Create a `.env` file in the root of the project and add the following variables.
 
-**Note:** The Mashvisor API key (`MASHVISOR_API_KEY_DEV`) is optional if you plan to skip financial calculations using the `--skip-mashvisor` flag (explained below).
+**Note:** The Mashvisor API key (`MASHVISOR_API_KEY_DEV`) is optional if you plan to skip financial calculations by setting `SKIP_MASHVISOR=true` (explained below).
 
 ```bash
 # .env
@@ -47,7 +47,11 @@ MASHVISOR_API_KEY_DEV=your_mashvisor_api_key
 
 
 
-### 5. Run the CLI
+### 5. Run the Agent
+
+Run the Real Estate Assistant through the Google Agents CLI. This goes through the ADK agent entry point (`app/agent.py`).
+
+Set **Skip Mashvisor** and **Mock APIs** as environment variables when needed:
 
 <div id="command-builder">
   <table>
@@ -87,7 +91,7 @@ MASHVISOR_API_KEY_DEV=your_mashvisor_api_key
     </tbody>
   </table>
   <p><strong>Generated command</strong></p>
-  <pre id="cb-output"><code>uv run python cli.py "Austin, TX"</code></pre>
+  <pre id="cb-output"><code>agents-cli run "Austin, TX"</code></pre>
   <button type="button" id="cb-copy">Copy command</button>
 </div>
 
@@ -107,11 +111,12 @@ MASHVISOR_API_KEY_DEV=your_mashvisor_api_key
 
   function buildCommand() {
     var location = locationInput.value.trim() || "Austin, TX";
-    var flags = [];
-    if (skipInput.value === "true") flags.push("--skip-mashvisor");
-    if (mockInput.value === "true") flags.push("--mock-apis");
-    var command = "uv run python cli.py " + escapeShellArg(location);
-    if (flags.length) command += " " + flags.join(" ");
+    var envVars = [];
+    if (skipInput.value === "true") envVars.push("SKIP_MASHVISOR=true");
+    if (mockInput.value === "true") envVars.push("USE_MOCK_APIS=true");
+    var command = "";
+    if (envVars.length) command += envVars.join(" ") + " ";
+    command += "agents-cli run " + escapeShellArg(location);
     return command;
   }
 
@@ -137,18 +142,6 @@ MASHVISOR_API_KEY_DEV=your_mashvisor_api_key
   updateCommand();
 })();
 </script>
-
-#### Alternative: Agents CLI
-
-You can also run the Real Estate Assistant through the Google Agents CLI. This path goes through the ADK agent entry point (`app/agent.py`).
-
-Instead of `cli.py` flags, set **Skip Mashvisor** and **Mock APIs** directly in the terminal as environment variables:
-
-```bash
-SKIP_MASHVISOR=true USE_MOCK_APIS=false agents-cli run "Austin, TX"
-```
-
-The input should be a target location (e.g., `"Austin, TX"` or `"Can I operate a short term rental in Jersey City, NJ?"`).
 
 ## Run the Playground
 
